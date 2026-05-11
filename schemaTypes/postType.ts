@@ -1,7 +1,7 @@
 // schemaTypes/postType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const postType = defineType({
   name: 'post-type',
   title: 'Post Type',
   type: 'document',
