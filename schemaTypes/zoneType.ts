@@ -7,6 +7,12 @@ export const zoneType = defineType({
   type: 'document',
   fields: [
     defineField({
+      name: 'id',
+      title: 'ID',
+      type: 'string',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'name',
       title: 'Name',
       type: 'string',
