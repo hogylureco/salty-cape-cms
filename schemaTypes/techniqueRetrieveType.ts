@@ -1,7 +1,7 @@
 // schemaTypes/techniqueRetrieveType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const techniqueRetrieveType = defineType({
   name: 'technique-retrieve',
   title: 'Technique Retrieve',
   type: 'document',
