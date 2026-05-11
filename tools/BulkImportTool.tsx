@@ -100,3 +100,59 @@ export function BulkImportTool() {
               <Select value={docType} onChange={(e) => setDocType(e.currentTarget.value)}>
                 {importableTypes.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </Select>
+            </Stack>
+
+            <Stack space={2}>
+              <Text size={1} weight="semibold">2. Upload CSV</Text>
+              <input type="file" accept=".csv" onChange={handleFile} />
+              {fileName && <Text size={1} muted>Selected: {fileName}</Text>}
+            </Stack>
+          </Stack>
+        </Card>
+
+        {status && (
+          <Card padding={3} radius={2} tone={status.startsWith('❌') ? 'critical' : 'positive'}>
+            <Text size={1}>{status}</Text>
+          </Card>
+        )}
+
+        {rows.length > 0 && (
+          <Stack space={3}>
+            <Text size={1} weight="semibold">Preview (first 5 rows)</Text>
+            <Card padding={3} radius={2} border overflow="auto">
+              <table style={{width: '100%', borderCollapse: 'collapse', fontSize: 13}}>
+                <thead>
+                  <tr>
+                    {headers.map((h) => (
+                      <th key={h} style={{textAlign: 'left', padding: 4, borderBottom: '1px solid #ddd'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 5).map((row, i) => (
+                    <tr key={i}>
+                      {headers.map((h) => (
+                        <td key={h} style={{padding: 4, borderBottom: '1px solid #eee'}}>{row[h]}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+
+            <Flex>
+              <Button
+                text={importing ? 'Importing...' : `Import ${rows.length} as drafts`}
+                tone="primary"
+                disabled={importing || !docType}
+                onClick={handleImport}
+              />
+            </Flex>
+          </Stack>
+        )}
+      </Stack>
+    </Box>
+  )
+}
