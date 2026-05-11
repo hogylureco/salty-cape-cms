@@ -1,21 +1,35 @@
-import {useState, useCallback} from 'react'
-import {useClient} from 'sanity'
+import {useState, useCallback, useMemo} from 'react'
+import {useClient, useSchema} from 'sanity'
 import {Card, Stack, Text, Button, Select, Box, Flex, Heading} from '@sanity/ui'
 import Papa from 'papaparse'
-
-// Add any schema types you want to be importable here
-const IMPORTABLE_TYPES = [
-  {value: 'spot', label: 'Spot'},
-  {value: 'baitfish', label: 'Baitfish'},
-  {value: 'targetSpecies', label: 'Target Species'},
-  // add more as needed
-]
 
 type Row = Record<string, string>
 
 export function BulkImportTool() {
   const client = useClient({apiVersion: '2024-01-01'})
-  const [docType, setDocType] = useState('spot')
+  const schema = useSchema()
+
+  // Auto-discover every document type in the schema
+  const importableTypes = useMemo(() => {
+    const types: {value: string; label: string}[] = []
+    for (const name of schema.getTypeNames()) {
+      const type = schema.get(name)
+      if (
+        type &&
+        type.type === 'document' &&
+        !name.startsWith('sanity.') &&
+        !name.startsWith('system.')
+      ) {
+        types.push({
+          value: name,
+          label: (type as any).title || name,
+        })
+      }
+    }
+    return types.sort((a, b) => a.label.localeCompare(b.label))
+  }, [schema])
+
+  const [docType, setDocType] = useState(importableTypes[0]?.value || '')
   const [rows, setRows] = useState<Row[]>([])
   const [fileName, setFileName] = useState<string>('')
   const [status, setStatus] = useState<string>('')
@@ -41,14 +55,13 @@ export function BulkImportTool() {
   }, [])
 
   const handleImport = useCallback(async () => {
-    if (!rows.length) return
+    if (!rows.length || !docType) return
     setImporting(true)
     setStatus(`Importing ${rows.length} documents...`)
 
     try {
       let created = 0
       for (const row of rows) {
-        // Coerce numeric strings to numbers (lat, lng, etc.)
         const cleaned: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(row)) {
           if (v === '' || v == null) continue
@@ -85,61 +98,5 @@ export function BulkImportTool() {
             <Stack space={2}>
               <Text size={1} weight="semibold">1. Choose document type</Text>
               <Select value={docType} onChange={(e) => setDocType(e.currentTarget.value)}>
-                {IMPORTABLE_TYPES.map((t) => (
+                {importableTypes.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </Select>
-            </Stack>
-
-            <Stack space={2}>
-              <Text size={1} weight="semibold">2. Upload CSV</Text>
-              <input type="file" accept=".csv" onChange={handleFile} />
-              {fileName && <Text size={1} muted>Selected: {fileName}</Text>}
-            </Stack>
-          </Stack>
-        </Card>
-
-        {status && (
-          <Card padding={3} radius={2} tone={status.startsWith('❌') ? 'critical' : 'positive'}>
-            <Text size={1}>{status}</Text>
-          </Card>
-        )}
-
-        {rows.length > 0 && (
-          <Stack space={3}>
-            <Text size={1} weight="semibold">Preview (first 5 rows)</Text>
-            <Card padding={3} radius={2} border overflow="auto">
-              <table style={{width: '100%', borderCollapse: 'collapse', fontSize: 13}}>
-                <thead>
-                  <tr>
-                    {headers.map((h) => (
-                      <th key={h} style={{textAlign: 'left', padding: 4, borderBottom: '1px solid #ddd'}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, 5).map((row, i) => (
-                    <tr key={i}>
-                      {headers.map((h) => (
-                        <td key={h} style={{padding: 4, borderBottom: '1px solid #eee'}}>{row[h]}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-
-            <Flex>
-              <Button
-                text={importing ? 'Importing...' : `Import ${rows.length} as drafts`}
-                tone="primary"
-                disabled={importing}
-                onClick={handleImport}
-              />
-            </Flex>
-          </Stack>
-        )}
-      </Stack>
-    </Box>
-  )
-}
