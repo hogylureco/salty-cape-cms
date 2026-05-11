@@ -24,7 +24,5 @@ export default defineConfig({
       component: BulkImportTool,
     },
   ],
-})
-
   
 })
