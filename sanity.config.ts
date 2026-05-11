@@ -16,4 +16,15 @@ export default defineConfig({
   schema: {
     types: schemaTypes,
   },
+
+  tools: [
+    {
+      name: 'bulk-import',
+      title: 'Bulk Import',
+      component: BulkImportTool,
+    },
+  ],
+})
+
+  
 })
