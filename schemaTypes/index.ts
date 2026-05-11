@@ -10,7 +10,7 @@ import {lureGearCategoryType.ts} from './lureGearCategoryType'
 import {methodType.ts} from './methodType'
 import {postType.ts} from './postType'
 import {platformType.ts} from './platformType'
-import {pseasonType.ts} from './seasonType'
+import {seasonType.ts} from './seasonType'
 import {approachType.ts} from './approachType'
 import {techniqueRetrieveType.ts} from './techniqueRetrieveType'
 
