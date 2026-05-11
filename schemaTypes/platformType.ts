@@ -1,7 +1,7 @@
 // schemaTypes/platformType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const platformType = defineType({
   name: 'platform',
   title: 'Platform',
   type: 'document',
