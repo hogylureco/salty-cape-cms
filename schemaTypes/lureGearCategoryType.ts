@@ -1,7 +1,7 @@
 // schemaTypes/lureGearCategoryType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const lureGearCategoryType = defineType({
   name: 'lure-gear-category',
   title: 'Lure Gear Category',
   type: 'document',
