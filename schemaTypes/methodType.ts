@@ -1,7 +1,7 @@
 // schemaTypes/methodType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const methodType = defineType({
   name: 'method',
   title: 'Method',
   type: 'document',
