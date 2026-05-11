@@ -29,5 +29,5 @@ export const schemaTypes = [
   platformType,
   seasonType,
   approachType,
-  techniqueRetrieveType
+  techniqueRetrieveType,
 ]
