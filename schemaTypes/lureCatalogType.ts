@@ -1,7 +1,7 @@
 // schemaTypes/lureCatalogType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const lureCatalogType = defineType({
   name: 'lure-catalog',
   title: 'Lure Catalog',
   type: 'document',
