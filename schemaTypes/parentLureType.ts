@@ -1,7 +1,7 @@
 // schemaTypes/parentLureType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const parentLureType = defineType({
   name: 'parent-lure',
   title: 'Parent Lure',
   type: 'document',
