@@ -1,10 +1,15 @@
 // schemaTypes/spotType.ts
 import {defineField, defineType} from 'sanity'
 
+import {JsonImportField} from './components/JsonImportField'
+
 export const spotType = defineType({
   name: 'spot',
   title: 'Spot',
   type: 'document',
+  components: {
+  input: JsonImportField,
+  },
   fields: [
     defineField({
       name: 'name',
