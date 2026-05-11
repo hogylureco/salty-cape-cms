@@ -1,33 +1,24 @@
 import {useState, useCallback, useMemo} from 'react'
-import {useClient, useSchema} from 'sanity'
+import {useClient} from 'sanity'
 import {Card, Stack, Text, Button, Select, Box, Flex, Heading} from '@sanity/ui'
 import Papa from 'papaparse'
+import {schemaTypes} from '../schemaTypes'
 
 type Row = Record<string, string>
 
 export function BulkImportTool() {
   const client = useClient({apiVersion: '2024-01-01'})
-  const schema = useSchema()
 
-  // Auto-discover every document type in the schema
+  // Auto-discover every document type from the schema array
   const importableTypes = useMemo(() => {
-    const types: {value: string; label: string}[] = []
-    for (const name of schema.getTypeNames()) {
-      const type = schema.get(name)
-      if (
-        type &&
-        type.type === 'document' &&
-        !name.startsWith('sanity.') &&
-        !name.startsWith('system.')
-      ) {
-        types.push({
-          value: name,
-          label: (type as any).title || name,
-        })
-      }
-    }
-    return types.sort((a, b) => a.label.localeCompare(b.label))
-  }, [schema])
+    return (schemaTypes as any[])
+      .filter((t) => t && t.type === 'document')
+      .map((t) => ({
+        value: t.name,
+        label: t.title || t.name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [])
 
   const [docType, setDocType] = useState(importableTypes[0]?.value || '')
   const [rows, setRows] = useState<Row[]>([])
@@ -98,9 +89,13 @@ export function BulkImportTool() {
             <Stack space={2}>
               <Text size={1} weight="semibold">1. Choose document type</Text>
               <Select value={docType} onChange={(e) => setDocType(e.currentTarget.value)}>
-                {importableTypes.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
+                {importableTypes.length === 0 ? (
+                  <option value="">No document types found</option>
+                ) : (
+                  importableTypes.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))
+                )}
               </Select>
             </Stack>
 
