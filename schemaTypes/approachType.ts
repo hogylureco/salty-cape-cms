@@ -1,7 +1,7 @@
 // schemaTypes/approachType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const approachType = defineType({
   name: 'approach',
   title: 'Approach',
   type: 'document',
