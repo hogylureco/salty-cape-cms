@@ -1,7 +1,7 @@
 // schemaTypes/seasonType.ts
 import {defineField, defineType} from 'sanity'
 
-export const regionType = defineType({
+export const seasonType = defineType({
   name: 'season',
   title: 'Season',
   type: 'document',
