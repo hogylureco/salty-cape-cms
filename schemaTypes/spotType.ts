@@ -155,6 +155,12 @@ export const spotType = defineType({
       of: [{type: 'reference', to: [{type: 'techniqueRetrieveType'}]}],
     }),
     defineField({
+      name: 'lureGearCategory',
+      title: 'Lure Gear Category',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'lureGearCategoryType'}]}],
+    }),
+    defineField({
       name: 'approachCodePrefix',
       title: 'Approach Code Prefix',
       type: 'string',
