@@ -26,6 +26,12 @@ export const videoType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'watchURL',
+      title: 'WatchURL',
+      type: 'string',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'description',
       title: 'Description',
       type: 'text',
