@@ -2,7 +2,7 @@
 import {defineField, defineType} from 'sanity'
 
 export const lureCatalogType = defineType({
-  name: 'lure-catalog',
+  name: 'lureCatalog',
   title: 'Lure Catalog',
   type: 'document',
   fields: [
