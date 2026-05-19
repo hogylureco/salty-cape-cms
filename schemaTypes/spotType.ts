@@ -109,6 +109,12 @@ export const spotType = defineType({
       type: 'array',
       of: [{type: 'reference', to: [{type: 'structureType'}]}],
     }),
+   defineField({
+      name: 'relatedVideos',
+      title: 'Related Videos',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'videoType'}]}],
+    }),
     defineField({
       name: 'depthRange',
       title: 'Depth Range',
