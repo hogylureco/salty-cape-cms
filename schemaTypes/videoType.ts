@@ -32,6 +32,18 @@ export const videoType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+  name: 'videoCategory',
+  title: 'Video Category',
+  type: 'string',
+  options: {
+    list: [
+      { title: 'Salty Cape TV', value: 'saltycapetv' },
+      { title: 'How To Video', value: 'howtovideo' },
+    ],
+    layout: 'dropdown', // or 'radio' for radio buttons
+  },
+}),
+    defineField({
       name: 'description',
       title: 'Description',
       type: 'text',
