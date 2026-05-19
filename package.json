@@ -21,7 +21,8 @@
     "sanity": "^5.23.0",
     "styled-components": "^6.1.18",
     "papaparse": "^5.4.1",
-    "sanity-plugin-rich-table": "^1.1.0"
+    "sanity-plugin-rich-table": "^1.1.0",
+    "sanity-plugin-media": "^2.3.0"
   },
   "devDependencies": {
     "@sanity/eslint-config-studio": "^6.0.0",
