@@ -151,7 +151,7 @@ export const spotType = defineType({
     }),
     defineField({
       name: 'microSeasons',
-      title: 'Micro Seasons',
+      title: 'Micro Seasons (deprecated)',
       type: 'text',
     }),
     defineField({
@@ -200,6 +200,12 @@ export const spotType = defineType({
       title: 'Nearby Spots',
       type: 'array',
       of: [{type: 'reference', to: [{type: 'spot'}]}],
+    }),
+    defineField({
+      name: 'microSeason',
+      title: 'Micro Season',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'microSeasonType'}]}],
     }),
     defineField({
       name: 'baitfish',
