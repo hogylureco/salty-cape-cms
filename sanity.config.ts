@@ -3,6 +3,7 @@ import {structureTool} from 'sanity/structure'
 import {visionTool} from '@sanity/vision'
 import {schemaTypes} from './schemaTypes'
 import {BulkImportTool} from './tools/BulkImportTool'
+import {richTablePlugin} from 'sanity-plugin-rich-table'
 
 export default defineConfig({
   name: 'default',
@@ -11,7 +12,7 @@ export default defineConfig({
   projectId: 'y83nf1qy',
   dataset: 'production',
 
-  plugins: [structureTool(), visionTool()],
+  plugins: [structureTool(), visionTool(), richTablePlugin({})],
 
   schema: {
     types: schemaTypes,
