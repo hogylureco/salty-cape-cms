@@ -244,14 +244,15 @@ export const spotType = defineType({
       ],
     }),
     defineField({
-      name: 'bodyText',
-      title: 'Body Text',
+      name: 'captMikeNotes',
+      title: 'Capt Mikes Notes',
       type: 'array',
       of: [
         {type: 'block'},
         {type: 'image', options: {hotspot: true}},
       ],
     }),
+    
   ],
   preview: {
     select: {
