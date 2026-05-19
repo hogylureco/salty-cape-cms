@@ -17,6 +17,12 @@ export const spotType = defineType({
       type: 'string',
       validation: (Rule) => Rule.required(),
     }),
+     defineField({
+      name: 'version',
+      title: 'Version',
+      type: 'string',
+      validation: (Rule) => Rule.required(),
+    }),
     defineField({
       name: 'name',
       title: 'Name',
