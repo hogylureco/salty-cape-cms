@@ -213,6 +213,11 @@ export const spotType = defineType({
       type: 'string',
     }),
     defineField({
+      name: 'currentStationId',
+      title: 'Current Station ID',
+      type: 'string',
+    }),
+    defineField({
       name: 'tideVariance',
       title: 'Tide Variance',
       type: 'number',
