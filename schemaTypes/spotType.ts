@@ -129,7 +129,7 @@ export const spotType = defineType({
     }),
     defineField({
       name: 'depthRange',
-      title: 'Depth Range',
+      title: 'Depth Range (deprecated)',
       type: 'string',
     }),
     defineField({
@@ -186,7 +186,7 @@ export const spotType = defineType({
     }),
     defineField({
       name: 'approachCodePrefix',
-      title: 'Approach Code Prefix',
+      title: 'Approach Code Prefix (deprecated)',
       type: 'string',
     }),
     defineField({
