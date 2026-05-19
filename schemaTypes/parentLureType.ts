@@ -2,7 +2,7 @@
 import {defineField, defineType} from 'sanity'
 
 export const parentLureType = defineType({
-  name: 'parent-lure',
+  name: 'parentLure',
   title: 'Parent Lure',
   type: 'document',
   fields: [
