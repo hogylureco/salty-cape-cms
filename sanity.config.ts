@@ -4,6 +4,7 @@ import {visionTool} from '@sanity/vision'
 import {schemaTypes} from './schemaTypes'
 import {BulkImportTool} from './tools/BulkImportTool'
 import {richTablePlugin} from 'sanity-plugin-rich-table'
+import {media} from 'sanity-plugin-media'
 
 export default defineConfig({
   name: 'default',
