@@ -165,6 +165,11 @@ export const spotType = defineType({
       type: 'string',
     }),
     defineField({
+      name: 'tideVariance',
+      title: 'Tide Variance',
+      type: 'number',
+    }),
+    defineField({
       name: 'gpxFile',
       title: 'GPX File',
       type: 'url',
