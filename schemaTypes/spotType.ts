@@ -253,6 +253,77 @@ export const spotType = defineType({
         {type: 'richTableBlock'},
       ],
     }),
+
+    defineField({
+      name: 'historicalAnalysis',
+      title: 'Step 1 - Historical Analysis',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
+
+        defineField({
+      name: 'spotCard',
+      title: 'Spot Card',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
+
+
+          defineField({
+      name: 'environmentalFactors',
+      title: 'Step 2 - Environmental Factors',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
+
+
+      defineField({
+      name: 'observationalFactors',
+      title: 'Step 3 - Observational Factors',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
+
+
+      defineField({
+      name: 'structureApproach',
+      title: 'Step 4-5 - Structure & Approach',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
+
+
+          defineField({
+      name: 'QAcaptMike',
+      title: 'Q&A with Capt Mike',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
+    
     
   ],
   preview: {
