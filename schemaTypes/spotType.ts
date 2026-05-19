@@ -128,7 +128,7 @@ export const spotType = defineType({
     }),
     defineField({
       name: 'hazards',
-      title: 'Hazards',
+      title: 'Hazards (deprecated)',
       type: 'text',
     }),
     defineField({
