@@ -2,8 +2,8 @@
 import {defineField, defineType} from 'sanity'
 
 export const structureType = defineType({
-  name: 'structureType',
-  title: 'Structure Type',
+  name: 'structure',
+  title: 'Structure',
   type: 'document',
   fields: [
     defineField({
