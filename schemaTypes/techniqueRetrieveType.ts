@@ -2,7 +2,7 @@
 import {defineField, defineType} from 'sanity'
 
 export const techniqueRetrieveType = defineType({
-  name: 'technique-retrieve',
+  name: 'techniqueRetrieve',
   title: 'Technique Retrieve',
   type: 'document',
   fields: [
