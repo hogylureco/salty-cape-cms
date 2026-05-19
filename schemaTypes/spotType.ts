@@ -116,8 +116,8 @@ export const spotType = defineType({
       },
     }),
     defineField({
-      name: 'structureType',
-      title: 'Structure Type',
+      name: 'structure',
+      title: 'Structure',
       type: 'array',
       of: [{type: 'reference', to: [{type: 'structure'}]}],
     }),
