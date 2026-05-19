@@ -250,6 +250,7 @@ export const spotType = defineType({
       of: [
         {type: 'block'},
         {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
       ],
     }),
     
