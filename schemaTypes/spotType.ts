@@ -149,6 +149,12 @@ export const spotType = defineType({
       of: [{type: 'reference', to: [{type: 'approachType'}]}],
     }),
     defineField({
+      name: 'techniqueRetrieve',
+      title: 'Technique Retrieve',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'techniqueRetrieveType'}]}],
+    }),
+    defineField({
       name: 'approachCodePrefix',
       title: 'Approach Code Prefix',
       type: 'string',
