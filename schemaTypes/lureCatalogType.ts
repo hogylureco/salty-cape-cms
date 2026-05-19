@@ -26,13 +26,13 @@ export const lureCatalogType = defineType({
       validation: (Rule) => Rule.required(),
     }),
       defineField({
-      name: 'l.parent',
+      name: 'parentLure',
       title: 'Parent Lure',
       type: 'array',
       of: [{type: 'reference', to: [{type: 'parentLure'}]}],
     }),
       defineField({
-      name: 'master-lure-category',
+      name: 'lureCategory',
       title: 'Master Lure Category',
       type: 'array',
       of: [{type: 'reference', to: [{type: 'lureGearCategory'}]}],
