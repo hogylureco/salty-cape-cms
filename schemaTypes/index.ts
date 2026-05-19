@@ -15,6 +15,7 @@ import {approachType} from './approachType'
 import {techniqueRetrieveType} from './techniqueRetrieveType'
 import {videoType} from './videoType'
 import {modeType} from './modeType'
+import {modeType} from './microSeasonType'
 
 export const schemaTypes = [
   spotType,
@@ -34,4 +35,6 @@ export const schemaTypes = [
   techniqueRetrieveType,
   videoType,
   modeType,
+  microSeasonType,
+  
 ]
