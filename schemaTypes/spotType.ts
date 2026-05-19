@@ -143,6 +143,12 @@ export const spotType = defineType({
       type: 'text',
     }),
     defineField({
+      name: 'approaches',
+      title: 'Approaches',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'approachType'}]}],
+    }),
+    defineField({
       name: 'approachCodePrefix',
       title: 'Approach Code Prefix',
       type: 'string',
