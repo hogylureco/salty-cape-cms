@@ -127,6 +127,12 @@ export const spotType = defineType({
       of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
     }),
     defineField({
+      name: 'seasons',
+      title: 'Seasons',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'seasonType'}]}],
+    }),
+    defineField({
       name: 'hazards',
       title: 'Hazards (deprecated)',
       type: 'text',
