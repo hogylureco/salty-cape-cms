@@ -54,8 +54,8 @@ export const spotType = defineType({
       of: [{type: 'reference', to: [{type: 'zone'}]}],
     }),
     defineField({
-      name: 'relatedSpots',
-      title: 'Related Spots',
+      name: 'subSpotsFXApproaches',
+      title: 'Sub Spots - FX Approaches',
       type: 'array',
       of: [{type: 'reference', to: [{type: 'spot'}]}],
     }),
