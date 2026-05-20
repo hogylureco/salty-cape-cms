@@ -60,6 +60,12 @@ export const spotType = defineType({
       of: [{type: 'reference', to: [{type: 'spot'}]}],
     }),
     defineField({
+      name: 'boatRamps',
+      title: 'boatRamps',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'spot'}]}],
+    }),
+    defineField({
       name: 'region',
       title: 'Region',
       type: 'array',
