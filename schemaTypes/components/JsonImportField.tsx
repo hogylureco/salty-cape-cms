@@ -246,9 +246,19 @@ function DocumentImporter(props: ObjectInputProps) {
           let value: unknown = rawValue
           let skipped = false
           let skipReason: string | undefined
+          let badRefs: string[] = []
 
           if (isRef) {
             value = coerceReferences(rawValue, resolveId)
+            badRefs = findBadRefs(value)
+            if (badRefs.length > 0) {
+              // Sanity rejects the ENTIRE mutation if any _ref is not a valid
+              // document ID, so don't write this field — flag it instead.
+              skipped = true
+              skipReason = `${badRefs.length} reference ID${
+                badRefs.length === 1 ? '' : 's'
+              } are not valid document IDs (e.g. "${badRefs[0]}")`
+            }
           } else if (
             kind === 'object' &&
             Array.isArray(rawValue) &&
@@ -273,7 +283,7 @@ function DocumentImporter(props: ObjectInputProps) {
             status,
             isRef,
             refCount: isRef && Array.isArray(value) ? value.length : 0,
-            badRefs: isRef ? findBadRefs(value) : [],
+            badRefs,
             oldValue: old,
             newValue: value,
             skipped,
@@ -388,10 +398,11 @@ function DocumentImporter(props: ObjectInputProps) {
             {counts.bad > 0 && (
               <Card padding={3} radius={2} tone="critical" border>
                 <Text size={1}>
-                  {counts.bad} reference value{counts.bad === 1 ? '' : 's'} don&apos;t look like
-                  valid document IDs (they contain spaces or other illegal characters). These
-                  will import but show as broken references. Each <code>_ref</code> must be the
-                  target document&apos;s <code>_id</code>.
+                  {counts.bad} reference value{counts.bad === 1 ? '' : 's'} aren&apos;t valid
+                  document IDs (they contain spaces or other illegal characters). Sanity rejects
+                  the entire import if any are invalid, so the affected fields are skipped below.
+                  Each <code>_ref</code> must be the target document&apos;s <code>_id</code> — fix
+                  the source data, add a resolver, or change the field to a non-reference type.
                 </Text>
               </Card>
             )}
