@@ -10,6 +10,11 @@ const SYSTEM_FIELDS = new Set(['_id', '_type', '_rev', '_createdAt', '_updatedAt
 // A valid Sanity document _id: letters, digits, dot, dash, underscore. No spaces.
 const VALID_ID = /^[A-Za-z0-9._-]+$/
 
+// Import references as WEAK (_weak: true) so they can point to documents that
+// don't exist yet (e.g. taxonomy/lure/spot docs imported later). Set to false
+// only if every target already exists and you want enforced strong references.
+const WEAK_REFERENCES = true
+
 // Reference cells often arrive as "CODE - Human Label". Split only on an ASCII
 // hyphen flanked by spaces so codes containing hyphens (BAIT-POG, LGC-100) survive.
 const ID_SEPARATOR = /\s-\s/
@@ -117,7 +122,12 @@ function coerceReferences(value: unknown, resolveId: (raw: string) => string): u
   if (!Array.isArray(value)) return value
   return value.map((item) => {
     if (typeof item === 'string') {
-      return {_type: 'reference', _ref: resolveId(item), _key: randomKey()}
+      return {
+        _type: 'reference',
+        _ref: resolveId(item),
+        _key: randomKey(),
+        ...(WEAK_REFERENCES ? {_weak: true} : {}),
+      }
     }
     if (item && typeof item === 'object') {
       const obj = item as Record<string, unknown>
@@ -126,6 +136,7 @@ function coerceReferences(value: unknown, resolveId: (raw: string) => string): u
         _ref: typeof obj._ref === 'string' ? resolveId(obj._ref) : obj._ref,
         _type: typeof obj._type === 'string' ? obj._type : 'reference',
         _key: typeof obj._key === 'string' ? obj._key : randomKey(),
+        ...(WEAK_REFERENCES && obj._weak === undefined ? {_weak: true} : {}),
       }
     }
     return item
