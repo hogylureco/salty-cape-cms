@@ -277,18 +277,6 @@ export const spotType = defineType({
       ],
     }),
 
-        defineField({
-      name: 'spotCard',
-      title: 'Spot Card',
-      type: 'array',
-      of: [
-        {type: 'block'},
-        {type: 'image', options: {hotspot: true}},
-        {type: 'richTableBlock'},
-      ],
-    }),
-
-
           defineField({
       name: 'environmentalFactors',
       title: 'Step 2 - Environmental Factors',
@@ -315,7 +303,7 @@ export const spotType = defineType({
 
       defineField({
       name: 'structureApproach',
-      title: 'Step 4-5 - Structure & Approach',
+      title: 'Step 4 - Structure & Approach',
       type: 'array',
       of: [
         {type: 'block'},
@@ -324,6 +312,16 @@ export const spotType = defineType({
       ],
     }),
 
+          defineField({
+      name: 'gearTechnique',
+      title: 'Step 5 - Gear & Technique',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
+    }),
 
           defineField({
       name: 'QAcaptMike',
