@@ -10,6 +10,32 @@ const SYSTEM_FIELDS = new Set(['_id', '_type', '_rev', '_createdAt', '_updatedAt
 // A valid Sanity document _id: letters, digits, dot, dash, underscore. No spaces.
 const VALID_ID = /^[A-Za-z0-9._-]+$/
 
+// Reference cells often arrive as "CODE - Human Label". Split only on an ASCII
+// hyphen flanked by spaces so codes containing hyphens (BAIT-POG, LGC-100) survive.
+const ID_SEPARATOR = /\s-\s/
+
+/** Default: take the CODE before " - ". Correct when the code IS the target _id. */
+function defaultRefId(raw: string): string {
+  const code = raw.split(ID_SEPARATOR)[0].trim()
+  return VALID_ID.test(code) ? code : raw
+}
+
+// Per-field overrides: map a raw cell to the *target document _id* for fields
+// whose _id differs from the bare code. Add an entry per such field.
+//
+// Your spot _ids look like "BB_WE_fs_West_End_of_the_Canal" (dotted code with
+// dots->underscores, then the underscored label) — not the bare "BB.CL.fs".
+// Uncomment and verify against your dataset before relying on it:
+const REF_ID_RESOLVERS: Record<string, (raw: string) => string> = {
+  // nearbySpots: (raw) => {
+  //   const [code, label = ''] = raw.split(ID_SEPARATOR)
+  //   const base = code.trim().replace(/\./g, '_')
+  //   return label ? `${base}_${label.trim().replace(/\s+/g, '_')}` : base
+  // },
+  // relatedVideos: (raw) => `video-${defaultRefId(raw)}`,   // e.g. YouTube ID with a prefix
+  // approaches: (raw) => defaultRefId(raw).replace(/\./g, '_'),
+}
+
 type Status = 'new' | 'changed' | 'unchanged'
 
 type FieldReport = {
@@ -54,16 +80,17 @@ function addKeys(value: unknown): unknown {
 }
 
 /** Normalize the members of a reference-array field into reference objects. */
-function coerceReferences(value: unknown): unknown {
+function coerceReferences(value: unknown, resolveId: (raw: string) => string): unknown {
   if (!Array.isArray(value)) return value
   return value.map((item) => {
     if (typeof item === 'string') {
-      return {_type: 'reference', _ref: item, _key: randomKey()}
+      return {_type: 'reference', _ref: resolveId(item), _key: randomKey()}
     }
     if (item && typeof item === 'object') {
       const obj = item as Record<string, unknown>
       return {
         ...obj,
+        _ref: typeof obj._ref === 'string' ? resolveId(obj._ref) : obj._ref,
         _type: typeof obj._type === 'string' ? obj._type : 'reference',
         _key: typeof obj._key === 'string' ? obj._key : randomKey(),
       }
@@ -183,7 +210,8 @@ export function JsonImportField(props: ObjectInputProps) {
           if (SYSTEM_FIELDS.has(key)) continue
 
           const isRef = refArrayFields.has(key)
-          let value: unknown = isRef ? coerceReferences(rawValue) : rawValue
+          const resolveId = REF_ID_RESOLVERS[key] ?? defaultRefId
+          let value: unknown = isRef ? coerceReferences(rawValue, resolveId) : rawValue
           value = addKeys(value)
 
           const old = existing[key]
