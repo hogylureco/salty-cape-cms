@@ -1,4 +1,4 @@
-import {set, type InputProps, type ObjectInputProps} from 'sanity'
+import {set, useClient, type InputProps, type ObjectInputProps} from 'sanity'
 import {isReferenceSchemaType} from '@sanity/types'
 import {Badge, Box, Button, Card, Checkbox, Flex, Stack, Text} from '@sanity/ui'
 import {useCallback, useRef, useState} from 'react'
@@ -14,6 +14,11 @@ const VALID_ID = /^[A-Za-z0-9._-]+$/
 // don't exist yet (e.g. taxonomy/lure/spot docs imported later). Set to false
 // only if every target already exists and you want enforced strong references.
 const WEAK_REFERENCES = true
+
+// The custom field on target documents that holds your business code (e.g. "STB",
+// "CGSPL.P"). The importer queries the dataset and maps this -> the real _id so
+// reference cells written as codes resolve to actual documents.
+const LOOKUP_FIELD = 'id'
 
 // Reference cells often arrive as "CODE - Human Label". Split only on an ASCII
 // hyphen flanked by spaces so codes containing hyphens (BAIT-POG, LGC-100) survive.
@@ -61,6 +66,7 @@ type FieldReport = {
   isRef: boolean
   refCount: number
   badRefs: string[]
+  unresolved: number
   oldValue: unknown
   newValue: unknown
   skipped: boolean
@@ -85,6 +91,44 @@ function arrayMemberKind(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (t.of.some((m: any) => m?.jsonType === 'object')) return 'object'
   return 'primitive'
+}
+
+/** The document type names a reference array can point to (from schema `to:`). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function refTargetTypes(field: any): string[] {
+  const t = field?.type
+  if (!t || t.jsonType !== 'array' || !Array.isArray(t.of)) return []
+  const types = new Set<string>()
+  for (const m of t.of) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (isReferenceSchemaType(m) && Array.isArray((m as any).to)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const target of (m as any).to) {
+        if (target?.name) types.add(target.name)
+      }
+    }
+  }
+  return [...types]
+}
+
+/**
+ * Resolve a raw reference cell to a real document _id using the dataset lookup.
+ * Tries the extracted code (before " - ") first, then the full trimmed string.
+ * Returns null if no matching document was found.
+ */
+function lookupId(
+  raw: string,
+  targetTypes: string[],
+  byType: Record<string, Record<string, string>>,
+): string | null {
+  const candidates = [raw.split(ID_SEPARATOR)[0].trim(), raw.trim()]
+  for (const type of targetTypes) {
+    for (const code of candidates) {
+      const id = byType[type]?.[code]
+      if (id) return id
+    }
+  }
+  return null
 }
 
 
@@ -214,6 +258,7 @@ const STATUS_TONE: Record<Status, 'primary' | 'caution' | 'positive'> = {
 /* -------------------------------------------------------------- component */
 
 function DocumentImporter(props: ObjectInputProps) {
+  const client = useClient({apiVersion: '2024-01-01'})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [report, setReport] = useState<FieldReport[] | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -236,11 +281,40 @@ function DocumentImporter(props: ObjectInputProps) {
           return
         }
 
-        // Classify each top-level array field from the schema.
+        // Classify each top-level array field, and collect the document types
+        // every reference field can point to (from the schema's `to:`).
         const arrayKinds = new Map<string, 'reference' | 'object' | 'primitive'>()
+        const refFieldTypes = new Map<string, string[]>()
+        const allTargetTypes = new Set<string>()
         for (const field of props.schemaType?.fields ?? []) {
           const kind = arrayMemberKind(field)
           if (kind) arrayKinds.set(field.name, kind)
+          if (kind === 'reference') {
+            const types = refTargetTypes(field)
+            refFieldTypes.set(field.name, types)
+            types.forEach((t) => allTargetTypes.add(t))
+          }
+        }
+
+        // Query the dataset once: build {type: {code: _id}} from the LOOKUP_FIELD,
+        // so reference cells written as codes resolve to real document _ids.
+        const byType: Record<string, Record<string, string>> = {}
+        if (allTargetTypes.size > 0) {
+          try {
+            const docs: Array<{_id: string; _type: string; _code: unknown}> =
+              await client.fetch(
+                `*[_type in $types && defined(${LOOKUP_FIELD})]{_id, _type, "_code": ${LOOKUP_FIELD}}`,
+                {types: [...allTargetTypes]},
+              )
+            for (const d of docs) {
+              if (typeof d._code !== 'string') continue
+              ;(byType[d._type] ||= {})[d._code] = d._id
+            }
+          } catch (err) {
+            // Lookup failed (offline / permissions) — fall back to code-based refs.
+            // eslint-disable-next-line no-console
+            console.warn('Reference _id lookup failed; using codes as-is:', err)
+          }
         }
 
         const existing = (props.value ?? {}) as Record<string, unknown>
@@ -252,16 +326,27 @@ function DocumentImporter(props: ObjectInputProps) {
 
           const kind = arrayKinds.get(key)
           const isRef = kind === 'reference'
-          const resolveId = REF_ID_RESOLVERS[key] ?? defaultRefId
+          const targetTypes = refFieldTypes.get(key) ?? []
+          const fallback = REF_ID_RESOLVERS[key] ?? defaultRefId
+          // Prefer a real _id from the dataset; fall back to a code-based id.
+          const resolveId = (raw: string) =>
+            lookupId(raw, targetTypes, byType) ?? fallback(raw)
 
           let value: unknown = rawValue
           let skipped = false
           let skipReason: string | undefined
           let badRefs: string[] = []
+          let unresolved = 0
 
           if (isRef) {
             value = coerceReferences(rawValue, resolveId)
             badRefs = findBadRefs(value)
+            // Count cells that didn't match any existing document.
+            if (Array.isArray(rawValue)) {
+              unresolved = rawValue.filter(
+                (x) => typeof x === 'string' && !lookupId(x, targetTypes, byType),
+              ).length
+            }
             if (badRefs.length > 0) {
               // Sanity rejects the ENTIRE mutation if any _ref is not a valid
               // document ID, so don't write this field — flag it instead.
@@ -295,6 +380,7 @@ function DocumentImporter(props: ObjectInputProps) {
             isRef,
             refCount: isRef && Array.isArray(value) ? value.length : 0,
             badRefs,
+            unresolved,
             oldValue: old,
             newValue: value,
             skipped,
@@ -311,7 +397,7 @@ function DocumentImporter(props: ObjectInputProps) {
         alert('Failed to parse JSON: ' + (err as Error).message)
       }
     },
-    [props.schemaType, props.value],
+    [props.schemaType, props.value, client],
   )
 
   const deploy = useCallback(() => {
@@ -461,12 +547,13 @@ function DocumentImporter(props: ObjectInputProps) {
                             )}
                             {r.isRef && (
                               <Badge
-                                tone={r.badRefs.length ? 'critical' : 'default'}
+                                tone={r.badRefs.length ? 'critical' : r.unresolved ? 'caution' : 'positive'}
                                 mode="outline"
                                 fontSize={0}
                               >
                                 {r.refCount} ref{r.refCount === 1 ? '' : 's'}
                                 {r.badRefs.length ? ` · ${r.badRefs.length} invalid` : ''}
+                                {r.unresolved ? ` · ${r.unresolved} unmatched` : ''}
                               </Badge>
                             )}
                           </Flex>
