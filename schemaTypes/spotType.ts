@@ -1,5 +1,5 @@
 // schemaTypes/spotType.ts
-import {defineField, defineType} from 'sanity' 
+import {defineField, defineType} from 'sanity'
 
 import {JsonImportField} from './components/JsonImportField'
 
