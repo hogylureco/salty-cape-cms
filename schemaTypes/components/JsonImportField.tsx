@@ -1,4 +1,4 @@
-import {set, type ObjectInputProps} from 'sanity'
+import {set, type InputProps, type ObjectInputProps} from 'sanity'
 import {isReferenceSchemaType} from '@sanity/types'
 import {Badge, Box, Button, Card, Checkbox, Flex, Stack, Text} from '@sanity/ui'
 import {useCallback, useRef, useState} from 'react'
@@ -181,7 +181,7 @@ const STATUS_TONE: Record<Status, 'primary' | 'caution' | 'positive'> = {
 
 /* -------------------------------------------------------------- component */
 
-export function JsonImportField(props: ObjectInputProps) {
+function DocumentImporter(props: ObjectInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [report, setReport] = useState<FieldReport[] | null>(null)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -471,4 +471,25 @@ const preStyle: React.CSSProperties = {
   fontFamily: 'var(--card-code-fg-color, monospace)',
   maxHeight: 280,
   overflow: 'auto',
+}
+
+/**
+ * Root-guarded wrapper. Registered globally at `form.components.input`, this fires
+ * for EVERY input in the Studio — so it must render the importer only at the
+ * document root and pass everything else straight to renderDefault. Without this
+ * guard the component hijacks every field and the form fails to render.
+ *
+ * To limit it to one document type, also check the type name, e.g.:
+ *   isDocRoot && props.schemaType.name === 'spot'
+ */
+export function JsonImportField(props: InputProps) {
+  const isDocRoot =
+    props.id === 'root' &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (props.schemaType as any)?.type?.name === 'document'
+
+  if (!isDocRoot) {
+    return props.renderDefault(props)
+  }
+  return <DocumentImporter {...(props as ObjectInputProps)} />
 }
