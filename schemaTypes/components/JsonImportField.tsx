@@ -474,21 +474,16 @@ const preStyle: React.CSSProperties = {
 }
 
 /**
- * Root-guarded wrapper. Registered globally at `form.components.input`, this fires
- * for EVERY input in the Studio — so it must render the importer only at the
- * document root and pass everything else straight to renderDefault. Without this
- * guard the component hijacks every field and the form fails to render.
+ * Renders the importer at the document root and passes every other input straight
+ * through. Register this on the SPOT DOCUMENT TYPE (components.input), NOT globally
+ * at form.components.input — global registration puts it in the render chain for
+ * every nested field (Portable Text, arrays, etc.) and breaks the form.
  *
- * To limit it to one document type, also check the type name, e.g.:
- *   isDocRoot && props.schemaType.name === 'spot'
+ * Scoped to the document type, it only ever fires at the root, so the `props.id`
+ * check is just a safety net against accidental global registration.
  */
 export function JsonImportField(props: InputProps) {
-  const isDocRoot =
-    props.id === 'root' &&
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (props.schemaType as any)?.type?.name === 'document'
-
-  if (!isDocRoot) {
+  if (props.id !== 'root') {
     return props.renderDefault(props)
   }
   return <DocumentImporter {...(props as ObjectInputProps)} />
