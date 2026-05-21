@@ -58,9 +58,30 @@ type FieldReport = {
   badRefs: string[]
   oldValue: unknown
   newValue: unknown
+  skipped: boolean
+  skipReason?: string
 }
 
 /* ---------------------------------------------------------------- helpers */
+
+/**
+ * Classify a schema field's array members: 'reference' (coerce string IDs into
+ * reference objects), 'object' (must be objects — writing bare strings here
+ * crashes the form), 'primitive' (strings/numbers, write as-is), or null if the
+ * field isn't an array. References are checked first since they're objects too.
+ */
+function arrayMemberKind(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  field: any,
+): 'reference' | 'object' | 'primitive' | null {
+  const t = field?.type
+  if (!t || t.jsonType !== 'array' || !Array.isArray(t.of)) return null
+  if (t.of.some(isReferenceSchemaType)) return 'reference'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (t.of.some((m: any) => m?.jsonType === 'object')) return 'object'
+  return 'primitive'
+}
+
 
 function randomKey(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -204,14 +225,11 @@ function DocumentImporter(props: ObjectInputProps) {
           return
         }
 
-        // Which top-level fields does the schema declare as reference arrays?
-        const refArrayFields = new Set<string>()
+        // Classify each top-level array field from the schema.
+        const arrayKinds = new Map<string, 'reference' | 'object' | 'primitive'>()
         for (const field of props.schemaType?.fields ?? []) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const t = field.type as any
-          if (t?.jsonType === 'array' && Array.isArray(t.of) && t.of.some(isReferenceSchemaType)) {
-            refArrayFields.add(field.name)
-          }
+          const kind = arrayMemberKind(field)
+          if (kind) arrayKinds.set(field.name, kind)
         }
 
         const existing = (props.value ?? {}) as Record<string, unknown>
@@ -221,9 +239,26 @@ function DocumentImporter(props: ObjectInputProps) {
         for (const [key, rawValue] of Object.entries(data)) {
           if (SYSTEM_FIELDS.has(key)) continue
 
-          const isRef = refArrayFields.has(key)
+          const kind = arrayKinds.get(key)
+          const isRef = kind === 'reference'
           const resolveId = REF_ID_RESOLVERS[key] ?? defaultRefId
-          let value: unknown = isRef ? coerceReferences(rawValue, resolveId) : rawValue
+
+          let value: unknown = rawValue
+          let skipped = false
+          let skipReason: string | undefined
+
+          if (isRef) {
+            value = coerceReferences(rawValue, resolveId)
+          } else if (
+            kind === 'object' &&
+            Array.isArray(rawValue) &&
+            rawValue.some((x) => typeof x !== 'object' || x === null)
+          ) {
+            // Schema expects objects but the JSON has bare strings/primitives.
+            // Writing this would crash the document form — refuse it.
+            skipped = true
+            skipReason = 'schema expects objects here, but the JSON has plain strings'
+          }
           value = addKeys(value)
 
           const old = existing[key]
@@ -241,9 +276,11 @@ function DocumentImporter(props: ObjectInputProps) {
             badRefs: isRef ? findBadRefs(value) : [],
             oldValue: old,
             newValue: value,
+            skipped,
+            skipReason,
           })
-          // default: apply everything that actually changes
-          nextSelected[key] = status !== 'unchanged'
+          // default: apply everything that changes and isn't skipped
+          nextSelected[key] = !skipped && status !== 'unchanged'
         }
 
         setReport(rows)
@@ -260,7 +297,7 @@ function DocumentImporter(props: ObjectInputProps) {
     if (!report) return
     let count = 0
     for (const r of report) {
-      if (!selected[r.key]) continue
+      if (r.skipped || !selected[r.key]) continue
       props.onChange(set(r.newValue, [r.key]))
       count++
     }
@@ -283,7 +320,7 @@ function DocumentImporter(props: ObjectInputProps) {
   const setAll = (val: boolean) => {
     if (!report) return
     const next: Record<string, boolean> = {}
-    for (const r of report) next[r.key] = val
+    for (const r of report) next[r.key] = val && !r.skipped
     setSelected(next)
   }
 
@@ -293,6 +330,7 @@ function DocumentImporter(props: ObjectInputProps) {
         changed: report.filter((r) => r.status === 'changed').length,
         unchanged: report.filter((r) => r.status === 'unchanged').length,
         bad: report.reduce((n, r) => n + r.badRefs.length, 0),
+        skipped: report.filter((r) => r.skipped).length,
         selected: report.filter((r) => selected[r.key]).length,
       }
     : null
@@ -358,6 +396,17 @@ function DocumentImporter(props: ObjectInputProps) {
               </Card>
             )}
 
+            {counts.skipped > 0 && (
+              <Card padding={3} radius={2} tone="critical" border>
+                <Text size={1}>
+                  {counts.skipped} field{counts.skipped === 1 ? '' : 's'} were skipped because the
+                  schema expects objects there but the JSON has plain strings. Writing them would
+                  crash the document form, so they won&apos;t be applied. Fix the source data (or
+                  the schema) for those fields.
+                </Text>
+              </Card>
+            )}
+
             <Flex gap={2}>
               <Button mode="ghost" fontSize={1} text="Select all" onClick={() => setAll(true)} />
               <Button mode="ghost" fontSize={1} text="Select none" onClick={() => setAll(false)} />
@@ -372,6 +421,7 @@ function DocumentImporter(props: ObjectInputProps) {
                       <Flex align="center" gap={3}>
                         <Checkbox
                           checked={!!selected[r.key]}
+                          disabled={r.skipped}
                           onChange={() => toggle(r.key)}
                         />
                         <Box flex={1}>
@@ -382,6 +432,11 @@ function DocumentImporter(props: ObjectInputProps) {
                             <Badge tone={STATUS_TONE[r.status]} fontSize={0}>
                               {r.status}
                             </Badge>
+                            {r.skipped && (
+                              <Badge tone="critical" fontSize={0}>
+                                skipped
+                              </Badge>
+                            )}
                             {r.isRef && (
                               <Badge
                                 tone={r.badRefs.length ? 'critical' : 'default'}
