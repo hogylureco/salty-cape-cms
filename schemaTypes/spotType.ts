@@ -45,7 +45,6 @@ export const spotType = defineType({
       name: 'spotId',
       title: 'Spot ID (Deprecated)',
       type: 'string',
-      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'zone',
