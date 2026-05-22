@@ -1,11 +1,18 @@
-import {useState, useCallback, useMemo, useEffect} from 'react'
+import {useState, useCallback, useMemo, useEffect, useRef} from 'react'
 import {useClient} from 'sanity'
-import {Card, Stack, Text, Button, Select, Box, Flex, Heading, Grid, Label} from '@sanity/ui'
+import {Card, Stack, Text, Button, Select, Box, Flex, Heading, Grid, Label, Badge} from '@sanity/ui'
 import Papa from 'papaparse'
 import {schemaTypes} from '../schemaTypes'
 
 type Row = Record<string, string>
 type DedupeAction = 'skip' | 'update' | 'create'
+
+// type | reference target | array inner type | array-of-reference target
+type FieldInfo = {type: string; to?: string; ofType?: string; ofTo?: string}
+
+function getSchema(typeName: string): any {
+  return (schemaTypes as any[]).find((t) => t?.name === typeName)
+}
 
 function transformValue(value: string, fieldType: string): unknown {
   const trimmed = value.trim()
@@ -20,6 +27,7 @@ function transformValue(value: string, fieldType: string): unknown {
     case 'boolean':
       return ['true', 'yes', '1'].includes(trimmed.toLowerCase())
     case 'reference':
+      // Fallback only — resolved references are built in buildDoc.
       return {_type: 'reference', _ref: trimmed}
     case 'geopoint': {
       const [lat, lng] = trimmed.split(',').map((s) => parseFloat(s.trim()))
@@ -27,6 +35,7 @@ function transformValue(value: string, fieldType: string): unknown {
       return trimmed
     }
     case 'array':
+      // Plain string array. Reference arrays are handled in buildDoc.
       return trimmed.split('|').map((s) => s.trim()).filter(Boolean)
     default:
       return trimmed
@@ -47,6 +56,34 @@ function autoMapColumns(csvHeaders: string[], fieldNames: string[]): Record<stri
   return mapping
 }
 
+// Candidate fields on a target type that we can match a reference against.
+// '_id' means "the CSV value is already the document _id" (old behavior).
+function refMatchOptions(targetType?: string): string[] {
+  const opts = ['_id']
+  const s = getSchema(targetType || '')
+  if (s?.fields) {
+    for (const f of s.fields) {
+      if (['string', 'slug', 'number'].includes(f.type)) opts.push(f.name)
+    }
+  }
+  return opts
+}
+
+function defaultRefMatch(targetType?: string): string {
+  const opts = refMatchOptions(targetType)
+  if (opts.includes('id')) return 'id'
+  if (opts.includes('slug')) return 'slug'
+  if (opts.includes('title')) return 'title'
+  return '_id'
+}
+
+function targetFieldType(targetType: string, fieldName: string): string {
+  if (fieldName === '_id') return 'string'
+  const s = getSchema(targetType)
+  const f = s?.fields?.find((x: any) => x.name === fieldName)
+  return f?.type || 'string'
+}
+
 export function BulkImportTool() {
   const client = useClient({apiVersion: '2024-01-01'})
 
@@ -62,23 +99,55 @@ export function BulkImportTool() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [fileName, setFileName] = useState<string>('')
   const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [refMatch, setRefMatch] = useState<Record<string, string>>({})
   const [dedupeField, setDedupeField] = useState<string>('')
   const [dedupeAction, setDedupeAction] = useState<DedupeAction>('skip')
   const [status, setStatus] = useState<string>('')
   const [importing, setImporting] = useState(false)
 
+  // value -> resolved _id (or null), keyed by target|matchField|value. Cleared per import.
+  const refCache = useRef<Map<string, string | null>>(new Map())
+
   const fieldMap = useMemo(() => {
-    const schema = (schemaTypes as any[]).find((t) => t?.name === docType)
-    const map: Record<string, {type: string}> = {}
+    const schema = getSchema(docType)
+    const map: Record<string, FieldInfo> = {}
     if (schema?.fields) {
-      for (const f of schema.fields) map[f.name] = {type: f.type}
+      for (const f of schema.fields) {
+        const entry: FieldInfo = {type: f.type}
+        if (f.type === 'reference') {
+          entry.to = f.to?.[0]?.type
+        }
+        if (f.type === 'array') {
+          const inner = f.of?.[0]
+          entry.ofType = inner?.type
+          if (inner?.type === 'reference') entry.ofTo = inner?.to?.[0]?.type
+        }
+        map[f.name] = entry
+      }
     }
     return map
   }, [docType])
 
   const schemaFieldNames = useMemo(() => Object.keys(fieldMap), [fieldMap])
 
-  // Re-map when docType changes if a CSV is already loaded
+  // Reference and reference-array fields that need resolution config.
+  const referenceFields = useMemo(
+    () => schemaFieldNames.filter((n) => fieldMap[n].type === 'reference' || fieldMap[n].ofTo),
+    [schemaFieldNames, fieldMap],
+  )
+
+  // Default the match field for each reference field whenever the doc type changes.
+  useEffect(() => {
+    const next: Record<string, string> = {}
+    for (const name of referenceFields) {
+      const target = fieldMap[name].to || fieldMap[name].ofTo
+      next[name] = defaultRefMatch(target)
+    }
+    setRefMatch(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docType])
+
+  // Re-map columns when docType changes if a CSV is already loaded.
   useEffect(() => {
     if (csvHeaders.length > 0) {
       setMapping(autoMapColumns(csvHeaders, schemaFieldNames))
@@ -113,21 +182,83 @@ export function BulkImportTool() {
     setMapping((prev) => ({...prev, [csvCol]: schemaField}))
   }, [])
 
+  const updateRefMatch = useCallback((field: string, matchField: string) => {
+    setRefMatch((prev) => ({...prev, [field]: matchField}))
+  }, [])
+
+  // Resolve a raw CSV value to a real document _id by matching against a target field.
+  const resolveRef = useCallback(
+    async (rawValue: string, targetType?: string, matchField?: string): Promise<string | null> => {
+      const value = (rawValue || '').trim()
+      if (!value || !targetType || !matchField) return null
+
+      const cacheKey = `${targetType}|${matchField}|${value}`
+      if (refCache.current.has(cacheKey)) return refCache.current.get(cacheKey) || null
+
+      let id: string | null = null
+      if (matchField === '_id') {
+        // Value is already the document _id — use as-is (legacy behavior).
+        id = value
+      } else {
+        const ft = targetFieldType(targetType, matchField)
+        const path = ft === 'slug' ? `${matchField}.current` : matchField
+        const query = `*[_type == $t && ${path} == $v][0]._id`
+        id = await client.fetch(query, {t: targetType, v: value})
+      }
+
+      refCache.current.set(cacheKey, id || null)
+      return id || null
+    },
+    [client],
+  )
+
   const buildDoc = useCallback(
-    (row: Row) => {
+    async (row: Row): Promise<{doc: Record<string, unknown>; unresolved: string[]}> => {
       const doc: Record<string, unknown> = {_type: docType}
+      const unresolved: string[] = []
+
       for (const [csvCol, schemaField] of Object.entries(mapping)) {
         if (!schemaField) continue
         const value = row[csvCol]
         if (value === '' || value == null) continue
         const field = fieldMap[schemaField]
         if (!field) continue
+
+        // Single reference — resolve to a real _id.
+        if (field.type === 'reference') {
+          const id = await resolveRef(value, field.to, refMatch[schemaField])
+          if (id) {
+            doc[schemaField] = {_type: 'reference', _ref: id}
+          } else {
+            unresolved.push(`${schemaField}="${value.trim()}"`)
+          }
+          continue
+        }
+
+        // Array of references — split, resolve each, wrap with a _key.
+        if (field.ofTo) {
+          const parts = value.split('|').map((s) => s.trim()).filter(Boolean)
+          const refs: any[] = []
+          for (const part of parts) {
+            const id = await resolveRef(part, field.ofTo, refMatch[schemaField])
+            if (id) {
+              refs.push({_type: 'reference', _ref: id, _key: crypto.randomUUID().slice(0, 12)})
+            } else {
+              unresolved.push(`${schemaField}="${part}"`)
+            }
+          }
+          if (refs.length) doc[schemaField] = refs
+          continue
+        }
+
+        // Everything else.
         const transformed = transformValue(value, field.type)
         if (transformed !== undefined) doc[schemaField] = transformed
       }
-      return doc
+
+      return {doc, unresolved}
     },
-    [docType, mapping, fieldMap],
+    [docType, mapping, fieldMap, refMatch, resolveRef],
   )
 
   const findExisting = useCallback(
@@ -149,6 +280,7 @@ export function BulkImportTool() {
     if (!rows.length || !docType) return
     setImporting(true)
     setStatus(`Importing ${rows.length} documents...`)
+    refCache.current.clear()
 
     const dedupeCsvCol = Object.entries(mapping).find(([, sf]) => sf === dedupeField)?.[0]
 
@@ -156,10 +288,12 @@ export function BulkImportTool() {
     let updated = 0
     let skipped = 0
     const errors: string[] = []
+    const unresolvedAll = new Set<string>()
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
-      const doc = buildDoc(row)
+      const {doc, unresolved} = await buildDoc(row)
+      unresolved.forEach((u) => unresolvedAll.add(u))
 
       try {
         if (dedupeField && dedupeCsvCol) {
@@ -198,12 +332,19 @@ export function BulkImportTool() {
     if (created) parts.push(`Created ${created}`)
     if (updated) parts.push(`Updated ${updated}`)
     if (skipped) parts.push(`Skipped ${skipped}`)
+    if (unresolvedAll.size) parts.push(`${unresolvedAll.size} unresolved ref${unresolvedAll.size === 1 ? '' : 's'}`)
     if (errors.length) parts.push(`${errors.length} error${errors.length === 1 ? '' : 's'}`)
 
-    const prefix = errors.length ? '⚠️' : '✅'
-    setStatus(`${prefix} ${parts.join(', ')}.${errors.length ? ' First error: ' + errors[0] : ''}`)
+    const hasProblems = errors.length || unresolvedAll.size
+    const prefix = hasProblems ? '⚠️' : '✅'
+    const detail: string[] = []
+    if (unresolvedAll.size) {
+      detail.push('Unresolved (left empty): ' + Array.from(unresolvedAll).slice(0, 5).join(', '))
+    }
+    if (errors.length) detail.push('First error: ' + errors[0])
+    setStatus(`${prefix} ${parts.join(', ')}.${detail.length ? ' ' + detail.join(' | ') : ''}`)
 
-    if (!errors.length) {
+    if (!hasProblems) {
       setRows([])
       setCsvHeaders([])
       setFileName('')
@@ -258,7 +399,9 @@ export function BulkImportTool() {
                     >
                       <option value="">— Skip —</option>
                       {schemaFieldNames.map((f) => (
-                        <option key={f} value={f}>{f} ({fieldMap[f].type})</option>
+                        <option key={f} value={f}>
+                          {f} ({fieldMap[f].ofTo ? `array<ref→${fieldMap[f].ofTo}>` : fieldMap[f].type})
+                        </option>
                       ))}
                     </Select>
                   </Grid>
@@ -268,10 +411,53 @@ export function BulkImportTool() {
           </Card>
         )}
 
+        {csvHeaders.length > 0 && referenceFields.length > 0 && (
+          <Card padding={4} radius={2} tone="primary" border>
+            <Stack space={4}>
+              <Text size={1} weight="semibold">4. Resolve references</Text>
+              <Text size={0} muted>
+                For each reference field, pick which field on the <em>target</em> document to match the
+                CSV value against. The match is looked up and the real <code>_id</code> is written as the
+                reference. Pick <code>_id</code> if your CSV already contains document IDs. Unresolved
+                values are left empty (not imported as broken refs).
+              </Text>
+              <Stack space={2}>
+                {referenceFields.map((field) => {
+                  const target = fieldMap[field].to || fieldMap[field].ofTo
+                  const isArray = Boolean(fieldMap[field].ofTo)
+                  const mapped = Object.values(mapping).includes(field)
+                  return (
+                    <Grid key={field} columns={2} gap={3}>
+                      <Box>
+                        <Flex align="center" gap={2}>
+                          <Text size={1} style={{fontFamily: 'monospace'}}>{field}</Text>
+                          {isArray && <Badge tone="primary" fontSize={0}>array</Badge>}
+                          {!mapped && <Badge tone="caution" fontSize={0}>not mapped</Badge>}
+                        </Flex>
+                        <Text size={0} muted>→ {target}</Text>
+                      </Box>
+                      <Select
+                        value={refMatch[field] || '_id'}
+                        onChange={(e) => updateRefMatch(field, e.currentTarget.value)}
+                      >
+                        {refMatchOptions(target).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt === '_id' ? '_id (value is already the ID)' : `match on ${opt}`}
+                          </option>
+                        ))}
+                      </Select>
+                    </Grid>
+                  )
+                })}
+              </Stack>
+            </Stack>
+          </Card>
+        )}
+
         {csvHeaders.length > 0 && (
           <Card padding={4} radius={2} tone="primary" border>
             <Stack space={4}>
-              <Text size={1} weight="semibold">4. Deduplication (optional)</Text>
+              <Text size={1} weight="semibold">5. Deduplication (optional)</Text>
               <Text size={0} muted>
                 Pick a field to check against existing documents. If a match is found, choose what to do.
               </Text>
