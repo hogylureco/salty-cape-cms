@@ -36,7 +36,7 @@ function transformValue(value: string, fieldType: string): unknown {
     }
     case 'array':
       // Plain string array. Reference arrays are handled in buildDoc.
-      return trimmed.split('|').map((s) => s.trim()).filter(Boolean)
+      return trimmed.split(/[;|]/).map((s) => s.trim()).filter(Boolean)
     default:
       return trimmed
   }
@@ -237,7 +237,7 @@ export function BulkImportTool() {
 
         // Array of references — split, resolve each, wrap with a _key.
         if (field.ofTo) {
-          const parts = value.split('|').map((s) => s.trim()).filter(Boolean)
+          const parts = value.split(/[;|]/).map((s) => s.trim()).filter(Boolean)
           const refs: any[] = []
           for (const part of parts) {
             const id = await resolveRef(part, field.ofTo, refMatch[schemaField])
