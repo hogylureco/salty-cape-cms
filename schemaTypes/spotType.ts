@@ -52,6 +52,26 @@ export const spotType = defineType({
       type: 'array',
       of: [{type: 'reference', to: [{type: 'zone'}]}],
     }),
+
+
+defineField({
+  name: 'spotType',
+  title: 'Spot Type',
+  type: 'string',
+  validation: (Rule) => Rule.required(),
+  options: {
+    list: [
+      {title: 'FS - Featured Spot', value: 'fs-featured-spot'},
+      {title: 'FX - Spot Playbook Approach', value: 'fx-spot-playbook-approach'},
+      {title: 'BR - Boat Ramp', value: 'br-boat-ramp'},
+      {title: 'FL - Featured Loop', value: 'fl-featured-loop'},
+    ],
+    layout: 'dropdown', // omit this and you get radio buttons instead
+  },
+}),
+
+
+    
     defineField({
       name: 'subSpotsFXApproaches',
       title: 'Sub Spots - FX Approaches',
