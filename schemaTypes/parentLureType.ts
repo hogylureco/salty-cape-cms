@@ -26,6 +26,16 @@ export const parentLureType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+  name: 'lParentURL',
+  title: 'Parent URL',
+  type: 'url',
+  validation: (Rule) => Rule.required().uri({
+    scheme: ['http', 'https'],
+  }),
+}),
+
+    
+    defineField({
       name: 'description',
       title: 'Description',
       type: 'text',
