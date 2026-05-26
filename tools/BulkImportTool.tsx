@@ -330,7 +330,10 @@ export function BulkImportTool() {
         if (field.type === 'reference') {
           const id = await resolveRef(value, field.to, refMatch[schemaField], importIds)
           if (id) {
-            doc[schemaField] = {_type: 'reference', _ref: id}
+            // Weak ref: Sanity requires the PUBLISHED target to exist for a
+            // strong ref. We import as drafts and targets may not exist yet,
+            // so weak avoids "references non-existent document" failures.
+            doc[schemaField] = {_type: 'reference', _ref: id, _weak: true}
           } else {
             unresolved.push(`${schemaField}="${value.trim()}"`)
           }
@@ -346,7 +349,7 @@ export function BulkImportTool() {
             const part = parts[i]
             const id = await resolveRef(part, field.ofTo, refMatch[schemaField], importIds)
             if (id) {
-              refs.push({_type: 'reference', _ref: id, _key: `${id}-${i}`})
+              refs.push({_type: 'reference', _ref: id, _key: `${id}-${i}`, _weak: true})
             } else {
               unresolved.push(`${schemaField}="${part}"`)
             }
