@@ -6,12 +6,31 @@ import {schemaTypes} from '../schemaTypes'
 
 type Row = Record<string, string>
 type DedupeAction = 'skip' | 'update' | 'create'
+// How the raw cell of a reference / reference-array column is shaped.
+type RefFormat = 'coded' | 'plain' | 'sku'
 
 // type | reference target | array inner type | array-of-reference target
 type FieldInfo = {type: string; to?: string; ofType?: string; ofTo?: string}
 
 function getSchema(typeName: string): any {
   return (schemaTypes as any[]).find((t) => t?.name === typeName)
+}
+
+/* ===========================================================================
+ * ID + token helpers
+ * ======================================================================== */
+
+// Sanity _ids allow only [A-Za-z0-9_-]. Codes like "BB.WE.fs" or "EPO.P"
+// contain dots, which collide with the reserved `drafts.` / `versions.` id
+// prefixes. Sanitize once, consistently, anywhere we MINT an id.
+//   "BB.WE.fs" -> "BB-WE-fs" , "EPO.P" -> "EPO-P" , "B500a" -> "B500a"
+function toDocId(code: string): string {
+  return String(code).trim().replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+// Lowercased slug form, for matching against / minting slug fields.
+function slugify(s: string): string {
+  return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
 // Pull the bare code out of a "CODE - Label" value, e.g.
@@ -23,6 +42,31 @@ function stripCode(value: string, enabled: boolean): string {
   if (!enabled) return v
   const idx = v.indexOf(' - ')
   return idx === -1 ? v : v.slice(0, idx).trim()
+}
+
+// A code: starts alphanumeric, then letters / digits / dots / hyphens.
+const CODE_RE = String.raw`[A-Za-z0-9][A-Za-z0-9.\-]*`
+// Split a multi-value cell ONLY at a "," or ";" that is immediately followed
+// by a "CODE - " token. This is the crux fix: it splits both comma- and
+// semicolon-delimited arrays while leaving commas INSIDE a label untouched,
+// e.g. the comma in "...[June, S. Side rips]" does not trigger a split.
+const SPLIT_AT_CODE = new RegExp(String.raw`\s*[;,|]\s*(?=${CODE_RE}\s-\s)`)
+// Bracketed SKU, e.g. "[PT51P-OL]" — the only reliable id in the mangled
+// Lure Catalog column, whose human text was broken by an upstream comma export.
+const SKU_RE = /\[([A-Za-z0-9._\-]+)\]/g
+
+// Turn one array cell into a list of raw tokens, per the chosen format.
+//  coded  -> code-anchored split, tokens look like "CODE - Label"
+//  plain  -> simple split, tokens are bare names ("Spring", "Summer")
+//  sku    -> every [SKU] bracket becomes a token
+function splitArrayCell(value: string, format: RefFormat): string[] {
+  const v = (value || '').trim()
+  if (!v) return []
+  if (format === 'sku') return [...v.matchAll(SKU_RE)].map((m) => m[1])
+  if (format === 'plain') return v.split(/[;,|]/).map((s) => s.trim()).filter(Boolean)
+  // coded (default): protects commas inside labels; falls back to the whole
+  // string as a single token when no "CODE - " pattern is present.
+  return v.split(SPLIT_AT_CODE).map((s) => s.trim()).filter(Boolean)
 }
 
 function transformValue(value: string, fieldType: string): unknown {
@@ -95,6 +139,8 @@ function targetFieldType(targetType: string, fieldName: string): string {
   return f?.type || 'string'
 }
 
+type Pending = {_id: string; _type: string; field: string; fieldType: string; value: string}
+
 export function BulkImportTool() {
   const client = useClient({apiVersion: '2024-01-01'})
 
@@ -111,7 +157,9 @@ export function BulkImportTool() {
   const [fileName, setFileName] = useState<string>('')
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [refMatch, setRefMatch] = useState<Record<string, string>>({})
+  const [refFormat, setRefFormat] = useState<Record<string, RefFormat>>({})
   const [stripPrefix, setStripPrefix] = useState(true)
+  const [createStubs, setCreateStubs] = useState(false)
   const [dedupeField, setDedupeField] = useState<string>('')
   const [dedupeAction, setDedupeAction] = useState<DedupeAction>('skip')
   const [status, setStatus] = useState<string>('')
@@ -119,6 +167,8 @@ export function BulkImportTool() {
 
   // value -> resolved _id (or null), keyed by target|matchField|value. Cleared per import.
   const refCache = useRef<Map<string, string | null>>(new Map())
+  // Placeholder docs to create when "create stubs" is on. Keyed by _id.
+  const pendingStubs = useRef<Map<string, Pending>>(new Map())
 
   const fieldMap = useMemo(() => {
     const schema = getSchema(docType)
@@ -148,14 +198,18 @@ export function BulkImportTool() {
     [schemaFieldNames, fieldMap],
   )
 
-  // Default the match field for each reference field whenever the doc type changes.
+  // Default the match field + value format for each reference field when the
+  // doc type changes.
   useEffect(() => {
-    const next: Record<string, string> = {}
+    const match: Record<string, string> = {}
+    const fmt: Record<string, RefFormat> = {}
     for (const name of referenceFields) {
       const target = fieldMap[name].to || fieldMap[name].ofTo
-      next[name] = defaultRefMatch(target)
+      match[name] = defaultRefMatch(target)
+      fmt[name] = 'coded'
     }
-    setRefMatch(next)
+    setRefMatch(match)
+    setRefFormat(fmt)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docType])
 
@@ -198,12 +252,17 @@ export function BulkImportTool() {
     setRefMatch((prev) => ({...prev, [field]: matchField}))
   }, [])
 
-  // Resolve a raw CSV value to a real document _id.
+  const updateRefFormat = useCallback((field: string, format: RefFormat) => {
+    setRefFormat((prev) => ({...prev, [field]: format}))
+  }, [])
+
+  // Resolve a raw CSV token to a real document _id.
   //  1. Strip the "CODE - Label" suffix to a bare code.
-  //  2. If that code belongs to a row in THIS import, use it directly
-  //     (those docs are created with _id == code), which handles cross-
-  //     references regardless of row order.
+  //  2. Mint a dot-safe id from it. If that id belongs to a row in THIS
+  //     import, use it directly (handles cross-references regardless of order).
   //  3. Otherwise look the code up in the Content Lake by the chosen field.
+  //  4. If unresolved and "create stubs" is on, register a placeholder and
+  //     return its id so the reference still points somewhere real.
   const resolveRef = useCallback(
     async (
       rawValue: string,
@@ -211,31 +270,45 @@ export function BulkImportTool() {
       matchField: string | undefined,
       importIds: Set<string>,
     ): Promise<string | null> => {
-      const code = stripCode(rawValue, stripPrefix)
+      const code = stripCode(rawValue, stripPrefix) // human code, e.g. "BB.WE.fs"
       if (!code || !targetType) return null
+      const id = toDocId(code) // dot-safe minted id, e.g. "BB-WE-fs"
 
       // Cross-reference to another row in this import.
-      if (importIds.has(code)) return code
+      if (importIds.has(id)) return id
 
       const mf = matchField || '_id'
       const cacheKey = `${targetType}|${mf}|${code}`
       if (refCache.current.has(cacheKey)) return refCache.current.get(cacheKey) || null
 
-      let id: string | null = null
+      let resolved: string | null = null
       if (mf === '_id') {
-        // Value is already the document _id — use as-is.
-        id = code
+        // Value is already the document id — use the dot-safe form.
+        resolved = id
       } else {
         const ft = targetFieldType(targetType, mf)
+        const lookupVal = ft === 'slug' ? slugify(code) : code
         const path = ft === 'slug' ? `${mf}.current` : mf
         const query = `*[_type == $t && ${path} == $v][0]._id`
-        id = await client.fetch(query, {t: targetType, v: code})
+        resolved = await client.fetch(query, {t: targetType, v: lookupVal})
+
+        // Not found — optionally mint a placeholder so the ref resolves.
+        if (!resolved && createStubs) {
+          pendingStubs.current.set(id, {
+            _id: id,
+            _type: targetType,
+            field: mf,
+            fieldType: ft,
+            value: ft === 'slug' ? slugify(code) : code,
+          })
+          resolved = id
+        }
       }
 
-      refCache.current.set(cacheKey, id || null)
-      return id || null
+      refCache.current.set(cacheKey, resolved || null)
+      return resolved || null
     },
-    [client, stripPrefix],
+    [client, stripPrefix, createStubs],
   )
 
   const buildDoc = useCallback(
@@ -264,19 +337,27 @@ export function BulkImportTool() {
           continue
         }
 
-        // Array of references — split, resolve each, wrap with a _key.
+        // Array of references — split per the column's format, resolve each,
+        // wrap with a deterministic _key (stable across re-imports).
         if (field.ofTo) {
-          const parts = value.split(/[;|]/).map((s) => s.trim()).filter(Boolean)
+          const parts = splitArrayCell(value, refFormat[schemaField] || 'coded')
           const refs: any[] = []
-          for (const part of parts) {
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i]
             const id = await resolveRef(part, field.ofTo, refMatch[schemaField], importIds)
             if (id) {
-              refs.push({_type: 'reference', _ref: id, _key: crypto.randomUUID().slice(0, 12)})
+              refs.push({_type: 'reference', _ref: id, _key: `${id}-${i}`})
             } else {
               unresolved.push(`${schemaField}="${part}"`)
             }
           }
           if (refs.length) doc[schemaField] = refs
+          continue
+        }
+
+        // The id/code key field: store the bare code, not "CODE - Label".
+        if (schemaField === 'id' && stripPrefix) {
+          doc[schemaField] = stripCode(value, true)
           continue
         }
 
@@ -287,7 +368,7 @@ export function BulkImportTool() {
 
       return {doc, unresolved}
     },
-    [docType, mapping, fieldMap, refMatch, resolveRef],
+    [docType, mapping, fieldMap, refMatch, refFormat, stripPrefix, resolveRef],
   )
 
   const findExisting = useCallback(
@@ -310,15 +391,16 @@ export function BulkImportTool() {
     setImporting(true)
     setStatus(`Importing ${rows.length} documents...`)
     refCache.current.clear()
+    pendingStubs.current.clear()
 
     const dedupeCsvCol = Object.entries(mapping).find(([, sf]) => sf === dedupeField)?.[0]
 
-    // First pass: collect the bare code of every row's ID column. Created docs
-    // are keyed by this code, so cross-references inside the file resolve
+    // First pass: collect the dot-safe id of every row's code column. Created
+    // docs are keyed by this id, so cross-references inside the file resolve
     // directly (independent of row order).
     const idCol = Object.entries(mapping).find(([, sf]) => sf === 'id')?.[0]
-    const codeFor = (row: Row) => (idCol ? stripCode(row[idCol] ?? '', stripPrefix) : '')
-    const importIds = new Set<string>(rows.map(codeFor).filter(Boolean))
+    const idFor = (row: Row) => (idCol ? toDocId(stripCode(row[idCol] ?? '', stripPrefix)) : '')
+    const importIds = new Set<string>(rows.map(idFor).filter(Boolean))
 
     let created = 0
     let updated = 0
@@ -353,12 +435,30 @@ export function BulkImportTool() {
           }
         }
 
-        const code = codeFor(row)
-        doc._id = `drafts.${code || crypto.randomUUID()}`
+        const id = idFor(row)
+        doc._id = `drafts.${id || crypto.randomUUID()}`
         await client.create(doc as any)
         created++
       } catch (err) {
         errors.push(`Row ${i + 1}: ${(err as Error).message}`)
+      }
+    }
+
+    // Create any placeholder docs collected for unresolved references. These
+    // are PUBLISHED minimal docs so the spot references resolve immediately;
+    // enrich them later. createIfNotExists never clobbers a real doc.
+    let stubs = 0
+    if (createStubs && pendingStubs.current.size) {
+      for (const s of pendingStubs.current.values()) {
+        try {
+          const stub: Record<string, unknown> = {_id: s._id, _type: s._type, _stub: true}
+          stub[s.field === '_id' ? 'code' : s.field] =
+            s.fieldType === 'slug' ? {_type: 'slug', current: s.value} : s.value
+          await client.createIfNotExists(stub as any)
+          stubs++
+        } catch (err) {
+          errors.push(`Stub ${s._id}: ${(err as Error).message}`)
+        }
       }
     }
 
@@ -368,6 +468,7 @@ export function BulkImportTool() {
     if (created) parts.push(`Created ${created}`)
     if (updated) parts.push(`Updated ${updated}`)
     if (skipped) parts.push(`Skipped ${skipped}`)
+    if (stubs) parts.push(`${stubs} placeholder${stubs === 1 ? '' : 's'}`)
     if (unresolvedAll.size) parts.push(`${unresolvedAll.size} unresolved ref${unresolvedAll.size === 1 ? '' : 's'}`)
     if (errors.length) parts.push(`${errors.length} error${errors.length === 1 ? '' : 's'}`)
 
@@ -386,7 +487,7 @@ export function BulkImportTool() {
       setFileName('')
       setMapping({})
     }
-  }, [rows, docType, mapping, dedupeField, dedupeAction, stripPrefix, buildDoc, findExisting, client])
+  }, [rows, docType, mapping, dedupeField, dedupeAction, stripPrefix, createStubs, buildDoc, findExisting, client])
 
   return (
     <Box padding={4}>
@@ -452,11 +553,12 @@ export function BulkImportTool() {
             <Stack space={4}>
               <Text size={1} weight="semibold">4. Resolve references</Text>
               <Text size={0} muted>
-                For each reference field, pick which field on the <em>target</em> document to match the
-                CSV value against. The match is looked up and the real <code>_id</code> is written as the
-                reference. Pick <code>_id</code> if your CSV already contains document IDs. Unresolved
-                values are left empty (not imported as broken refs).
+                For each reference field, pick which field on the <em>target</em> document to match
+                against, and how the CSV cell is shaped. The match is looked up and the real{' '}
+                <code>_id</code> is written. Unresolved values are left empty unless "create
+                placeholders" is on.
               </Text>
+
               <Flex align="center" gap={2} paddingY={1}>
                 <Checkbox
                   id="strip-prefix"
@@ -470,11 +572,30 @@ export function BulkImportTool() {
                   <Text size={0} muted>
                     Matches the bare code (e.g. <code>BB.WE.fx.B.C1 - Chasing Spring Birds</code> →{' '}
                     <code>BB.WE.fx.B.C1</code>). Cross-references to other rows in this file resolve
-                    automatically.
+                    automatically. Dots in codes are made id-safe (<code>BB.WE.fs</code> →{' '}
+                    <code>BB-WE-fs</code>).
                   </Text>
                 </Box>
               </Flex>
-              <Stack space={2}>
+
+              <Flex align="center" gap={2} paddingY={1}>
+                <Checkbox
+                  id="create-stubs"
+                  checked={createStubs}
+                  onChange={(e) => setCreateStubs(e.currentTarget.checked)}
+                />
+                <Box>
+                  <Text size={1} as="label" htmlFor="create-stubs">
+                    Create placeholder docs for unresolved references
+                  </Text>
+                  <Text size={0} muted>
+                    Mints a minimal published document for any reference target that doesn't exist
+                    yet, so every reference points somewhere real. Enrich them later; safe to re-run.
+                  </Text>
+                </Box>
+              </Flex>
+
+              <Stack space={3}>
                 {referenceFields.map((field) => {
                   const target = fieldMap[field].to || fieldMap[field].ofTo
                   const isArray = Boolean(fieldMap[field].ofTo)
@@ -489,16 +610,28 @@ export function BulkImportTool() {
                         </Flex>
                         <Text size={0} muted>→ {target}</Text>
                       </Box>
-                      <Select
-                        value={refMatch[field] || '_id'}
-                        onChange={(e) => updateRefMatch(field, e.currentTarget.value)}
-                      >
-                        {refMatchOptions(target).map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt === '_id' ? '_id (value is already the ID)' : `match on ${opt}`}
-                          </option>
-                        ))}
-                      </Select>
+                      <Stack space={2}>
+                        <Select
+                          value={refMatch[field] || '_id'}
+                          onChange={(e) => updateRefMatch(field, e.currentTarget.value)}
+                        >
+                          {refMatchOptions(target).map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt === '_id' ? '_id (value is already the ID)' : `match on ${opt}`}
+                            </option>
+                          ))}
+                        </Select>
+                        {isArray && (
+                          <Select
+                            value={refFormat[field] || 'coded'}
+                            onChange={(e) => updateRefFormat(field, e.currentTarget.value as RefFormat)}
+                          >
+                            <option value="coded">format: CODE - Label (comma/semicolon)</option>
+                            <option value="plain">format: plain names (Spring, Summer)</option>
+                            <option value="sku">format: bracketed [SKU]</option>
+                          </Select>
+                        )}
+                      </Stack>
                     </Grid>
                   )
                 })}
