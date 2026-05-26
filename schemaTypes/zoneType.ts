@@ -30,12 +30,6 @@ export const zoneType = defineType({
       title: 'Description',
       type: 'text',
     }),
-    defineField({
-      name: 'region',
-      title: 'Parent Region',
-      type: 'reference',
-      to: [{type: 'region'}],
-    }),
   ],
   preview: {
     select: {title: 'name', subtitle: 'region.name'},
