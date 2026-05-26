@@ -9,8 +9,9 @@ type DedupeAction = 'skip' | 'update' | 'create'
 // How the raw cell of a reference / reference-array column is shaped.
 type RefFormat = 'coded' | 'plain' | 'sku'
 
-// type | reference target | array inner type | array-of-reference target
-type FieldInfo = {type: string; to?: string; ofType?: string; ofTo?: string}
+// type | reference target | array inner type | array-of-reference target | enum list
+type EnumItem = {title?: string; value?: string} | string
+type FieldInfo = {type: string; to?: string; ofType?: string; ofTo?: string; list?: EnumItem[]}
 
 function getSchema(typeName: string): any {
   return (schemaTypes as any[]).find((t) => t?.name === typeName)
@@ -69,6 +70,31 @@ function splitArrayCell(value: string, format: RefFormat): string[] {
   return v.split(SPLIT_AT_CODE).map((s) => s.trim()).filter(Boolean)
 }
 
+// Map a CSV cell to an allowed enum value, e.g. "fs - featured spot" ->
+// "fs-featured-spot", "Spot" -> "spot", "Boat" -> "boat". Matches the value
+// or title (raw or slugified). Falls back to the slug so data is never lost.
+function enumValue(value: string, list?: EnumItem[]): string {
+  const v = (value || '').trim()
+  if (!list?.length) return v
+  const want = slugify(v)
+  for (const item of list) {
+    const iv = typeof item === 'string' ? item : item.value ?? ''
+    const it = typeof item === 'string' ? item : item.title ?? ''
+    if (iv === v) return iv
+    if (slugify(iv) === want || slugify(it) === want) return iv
+  }
+  return slugify(v)
+}
+
+// Guess the value-format of an array column from its sampled cells.
+function sniffFormat(values: string[]): RefFormat {
+  const sample = values.filter(Boolean).slice(0, 10)
+  if (!sample.length) return 'coded'
+  if (sample.some((v) => /\[[A-Za-z0-9._-]+\]/.test(v))) return 'sku'
+  if (sample.some((v) => / - /.test(v))) return 'coded'
+  return 'plain'
+}
+
 function transformValue(value: string, fieldType: string): unknown {
   const trimmed = value.trim()
   if (trimmed === '') return undefined
@@ -100,13 +126,28 @@ function transformValue(value: string, fieldType: string): unknown {
 function autoMapColumns(csvHeaders: string[], fieldNames: string[]): Record<string, string> {
   const mapping: Record<string, string> = {}
   const normalize = (s: string) => s.toLowerCase().trim().replace(/[\s_-]/g, '')
+  // Also compare with a trailing plural "s" removed, so a "Parent Lure" column
+  // matches a `parentLures` field, "Mode" matches `modes`, etc.
+  const singular = (s: string) => normalize(s).replace(/s$/, '')
   for (const header of csvHeaders) {
     if (fieldNames.includes(header)) {
       mapping[header] = header
       continue
     }
-    const match = fieldNames.find((f) => normalize(f) === normalize(header))
-    mapping[header] = match || ''
+    const exact = fieldNames.find((f) => normalize(f) === normalize(header))
+    const loose = exact || fieldNames.find((f) => singular(f) === singular(header))
+    // Last resort: a single field whose normalized name is contained in the
+    // header (or vice versa), e.g. "Lure Catalog Field" -> `lureCatalog`.
+    let contained = loose
+    if (!contained) {
+      const h = normalize(header)
+      const hits = fieldNames.filter((f) => {
+        const n = normalize(f)
+        return n.length >= 4 && (h.includes(n) || n.includes(h))
+      })
+      if (hits.length === 1) contained = hits[0]
+    }
+    mapping[header] = contained || ''
   }
   return mapping
 }
@@ -169,6 +210,8 @@ export function BulkImportTool() {
   const refCache = useRef<Map<string, string | null>>(new Map())
   // Placeholder docs to create when "create stubs" is on. Keyed by _id.
   const pendingStubs = useRef<Map<string, Pending>>(new Map())
+  // Refs whose target wasn't found (written as weak, awaiting their target).
+  const provisional = useRef<Set<string>>(new Set())
 
   const fieldMap = useMemo(() => {
     const schema = getSchema(docType)
@@ -184,6 +227,8 @@ export function BulkImportTool() {
           entry.ofType = inner?.type
           if (inner?.type === 'reference') entry.ofTo = inner?.to?.[0]?.type
         }
+        // String enums (spotType, postType) and string-array enums (platform).
+        if (f.options?.list) entry.list = f.options.list
         map[f.name] = entry
       }
     }
@@ -233,15 +278,28 @@ export function BulkImportTool() {
         skipEmptyLines: true,
         complete: (results) => {
           const headers = results.meta.fields || []
+          const data = results.data
+          const map = autoMapColumns(headers, schemaFieldNames)
           setCsvHeaders(headers)
-          setRows(results.data)
-          setMapping(autoMapColumns(headers, schemaFieldNames))
-          setStatus(`Parsed ${results.data.length} rows. Map columns and import.`)
+          setRows(data)
+          setMapping(map)
+          // Auto-detect the value-format of each reference-array column from
+          // its data: bracketed [SKU] -> sku, "CODE - Label" -> coded, else plain.
+          setRefFormat((prev) => {
+            const next = {...prev}
+            for (const [col, sf] of Object.entries(map)) {
+              if (sf && fieldMap[sf]?.ofTo) {
+                next[sf] = sniffFormat(data.map((r) => r[col] || ''))
+              }
+            }
+            return next
+          })
+          setStatus(`Parsed ${data.length} rows. Map columns and import.`)
         },
         error: (err) => setStatus(`Parse error: ${err.message}`),
       })
     },
-    [schemaFieldNames],
+    [schemaFieldNames, fieldMap],
   )
 
   const updateMapping = useCallback((csvCol: string, schemaField: string) => {
@@ -292,15 +350,21 @@ export function BulkImportTool() {
         const query = `*[_type == $t && ${path} == $v][0]._id`
         resolved = await client.fetch(query, {t: targetType, v: lookupVal})
 
-        // Not found — optionally mint a placeholder so the ref resolves.
-        if (!resolved && createStubs) {
-          pendingStubs.current.set(id, {
-            _id: id,
-            _type: targetType,
-            field: mf,
-            fieldType: ft,
-            value: ft === 'slug' ? slugify(code) : code,
-          })
+        // Not found in the dataset. Do NOT drop the reference — write a weak
+        // ref to the minted id so the field still imports. It resolves the
+        // moment a doc with this id exists (importing the taxonomy later, or
+        // the placeholder below). Weak refs to non-existent docs are legal.
+        if (!resolved) {
+          provisional.current.add(`${targetType}:${id}`)
+          if (createStubs) {
+            pendingStubs.current.set(id, {
+              _id: id,
+              _type: targetType,
+              field: mf,
+              fieldType: ft,
+              value: ft === 'slug' ? slugify(code) : code,
+            })
+          }
           resolved = id
         }
       }
@@ -358,13 +422,31 @@ export function BulkImportTool() {
           continue
         }
 
-        // The id/code key field: store the bare code, not "CODE - Label".
-        if (schemaField === 'id' && stripPrefix) {
-          doc[schemaField] = stripCode(value, true)
+        // Array of plain strings (e.g. platform). Split, then snap each token
+        // to its allowed enum value if the field has an options list.
+        if (field.type === 'array' && field.ofType === 'string') {
+          const parts = value.split(/[;,|]/).map((s) => s.trim()).filter(Boolean)
+          const vals = parts.map((p) => enumValue(p, field.list))
+          if (vals.length) doc[schemaField] = vals
           continue
         }
 
-        // Everything else.
+        // Unsupported array content (block / image / table) — can't come from
+        // a CSV cell, so skip rather than write an invalid value.
+        if (field.type === 'array') continue
+
+        // Single string with an options list (spotType, postType): snap the
+        // raw value to the matching enum value, else the Studio shows it blank.
+        if (field.type === 'string' && field.list) {
+          doc[schemaField] = enumValue(value, field.list)
+          continue
+        }
+
+        // Image / file fields need an uploaded asset, not a string — skip.
+        if (field.type === 'image' || field.type === 'file') continue
+
+        // Everything else. The `id` field keeps its full "CODE - Label"
+        // value; only the document _id is derived from the bare code.
         const transformed = transformValue(value, field.type)
         if (transformed !== undefined) doc[schemaField] = transformed
       }
@@ -395,6 +477,7 @@ export function BulkImportTool() {
     setStatus(`Importing ${rows.length} documents...`)
     refCache.current.clear()
     pendingStubs.current.clear()
+    provisional.current.clear()
 
     const dedupeCsvCol = Object.entries(mapping).find(([, sf]) => sf === dedupeField)?.[0]
 
@@ -467,17 +550,26 @@ export function BulkImportTool() {
 
     setImporting(false)
 
+    const prov = provisional.current.size
     const parts: string[] = []
     if (created) parts.push(`Created ${created}`)
     if (updated) parts.push(`Updated ${updated}`)
     if (skipped) parts.push(`Skipped ${skipped}`)
     if (stubs) parts.push(`${stubs} placeholder${stubs === 1 ? '' : 's'}`)
+    if (prov) parts.push(`${prov} weak ref${prov === 1 ? '' : 's'} pending`)
     if (unresolvedAll.size) parts.push(`${unresolvedAll.size} unresolved ref${unresolvedAll.size === 1 ? '' : 's'}`)
     if (errors.length) parts.push(`${errors.length} error${errors.length === 1 ? '' : 's'}`)
 
+    // Provisional weak refs are expected (fields still imported), not a failure.
     const hasProblems = errors.length || unresolvedAll.size
     const prefix = hasProblems ? '⚠️' : '✅'
     const detail: string[] = []
+    if (prov && !createStubs) {
+      detail.push(
+        `${prov} ref${prov === 1 ? '' : 's'} written weak — target docs not in dataset. ` +
+          `Enable "Create placeholder docs" or import those types to resolve them.`,
+      )
+    }
     if (unresolvedAll.size) {
       detail.push('Unresolved (left empty): ' + Array.from(unresolvedAll).slice(0, 5).join(', '))
     }
