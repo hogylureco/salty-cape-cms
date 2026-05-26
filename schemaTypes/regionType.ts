@@ -26,11 +26,6 @@ export const regionType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'macroRegion',
-      title: 'Macro Region',
-      type: 'string',
-    }),
-    defineField({
       name: 'description',
       title: 'Description',
       type: 'text',
