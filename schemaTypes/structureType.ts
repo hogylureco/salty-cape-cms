@@ -33,6 +33,24 @@ export const structureType = defineType({
       scheme: ['http', 'https'],
   }),
 }),
+      defineField({
+      name: 'zone',
+      title: 'Zone',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'zone'}]}],
+    }),
+    defineField({
+      name: 'method',
+      title: 'Method',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'method'}]}],
+    }),
+    defineField({
+      name: 'targetSpecies',
+      title: 'Target Species',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
+    }),
     defineField({
       name: 'description',
       title: 'Description',
