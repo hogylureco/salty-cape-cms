@@ -25,6 +25,52 @@ export const lureGearCategoryType = defineType({
       options: {source: 'name', maxLength: 96},
       validation: (Rule) => Rule.required(),
     }),
+
+    defineField({
+  name: 'imageURL',
+  title: 'Image URL',
+  type: 'url',
+  validation: (Rule) => Rule.required().uri({
+    scheme: ['http', 'https'],
+  }),
+}),
+        defineField({
+  name: 'websitelink',
+  title: 'Website Link',
+  type: 'url',
+  validation: (Rule) => Rule.required().uri({
+    scheme: ['http', 'https'],
+  }),
+}),
+
+        defineField({
+      name: 'zone',
+      title: 'Zone',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'zone'}]}],
+    }),
+
+        defineField({
+      name: 'method',
+      title: 'Method',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'method'}]}],
+    }),
+
+            defineField({
+      name: 'targetspecies',
+      title: 'Target Species',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
+    }),
+
+                defineField({
+      name: 'baitfish',
+      title: 'Baitfish',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'baitfish'}]}],
+    }),
+    
     defineField({
       name: 'description',
       title: 'Description',
