@@ -1,6 +1,6 @@
 import {useState, useCallback, useMemo, useEffect, useRef} from 'react'
 import {useClient} from 'sanity'
-import {Card, Stack, Text, Button, Select, Box, Flex, Heading, Grid, Label, Badge} from '@sanity/ui'
+import {Card, Stack, Text, Button, Select, Box, Flex, Heading, Grid, Label, Badge, Checkbox} from '@sanity/ui'
 import Papa from 'papaparse'
 import {schemaTypes} from '../schemaTypes'
 
@@ -12,6 +12,17 @@ type FieldInfo = {type: string; to?: string; ofType?: string; ofTo?: string}
 
 function getSchema(typeName: string): any {
   return (schemaTypes as any[]).find((t) => t?.name === typeName)
+}
+
+// Pull the bare code out of a "CODE - Label" value, e.g.
+// "BB.WE.fx.B.C1 - Chasing Spring Birds" -> "BB.WE.fx.B.C1".
+// Splits on the FIRST " - " (space-hyphen-space), so hyphens inside a code
+// (LGC-210) or em-dashes inside a label (— 1.0 mi) are left alone.
+function stripCode(value: string, enabled: boolean): string {
+  const v = (value || '').trim()
+  if (!enabled) return v
+  const idx = v.indexOf(' - ')
+  return idx === -1 ? v : v.slice(0, idx).trim()
 }
 
 function transformValue(value: string, fieldType: string): unknown {
@@ -100,6 +111,7 @@ export function BulkImportTool() {
   const [fileName, setFileName] = useState<string>('')
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [refMatch, setRefMatch] = useState<Record<string, string>>({})
+  const [stripPrefix, setStripPrefix] = useState(true)
   const [dedupeField, setDedupeField] = useState<string>('')
   const [dedupeAction, setDedupeAction] = useState<DedupeAction>('skip')
   const [status, setStatus] = useState<string>('')
@@ -186,34 +198,51 @@ export function BulkImportTool() {
     setRefMatch((prev) => ({...prev, [field]: matchField}))
   }, [])
 
-  // Resolve a raw CSV value to a real document _id by matching against a target field.
+  // Resolve a raw CSV value to a real document _id.
+  //  1. Strip the "CODE - Label" suffix to a bare code.
+  //  2. If that code belongs to a row in THIS import, use it directly
+  //     (those docs are created with _id == code), which handles cross-
+  //     references regardless of row order.
+  //  3. Otherwise look the code up in the Content Lake by the chosen field.
   const resolveRef = useCallback(
-    async (rawValue: string, targetType?: string, matchField?: string): Promise<string | null> => {
-      const value = (rawValue || '').trim()
-      if (!value || !targetType || !matchField) return null
+    async (
+      rawValue: string,
+      targetType: string | undefined,
+      matchField: string | undefined,
+      importIds: Set<string>,
+    ): Promise<string | null> => {
+      const code = stripCode(rawValue, stripPrefix)
+      if (!code || !targetType) return null
 
-      const cacheKey = `${targetType}|${matchField}|${value}`
+      // Cross-reference to another row in this import.
+      if (importIds.has(code)) return code
+
+      const mf = matchField || '_id'
+      const cacheKey = `${targetType}|${mf}|${code}`
       if (refCache.current.has(cacheKey)) return refCache.current.get(cacheKey) || null
 
       let id: string | null = null
-      if (matchField === '_id') {
-        // Value is already the document _id — use as-is (legacy behavior).
-        id = value
+      if (mf === '_id') {
+        // Value is already the document _id — use as-is.
+        id = code
       } else {
-        const ft = targetFieldType(targetType, matchField)
-        const path = ft === 'slug' ? `${matchField}.current` : matchField
+        const ft = targetFieldType(targetType, mf)
+        const path = ft === 'slug' ? `${mf}.current` : mf
         const query = `*[_type == $t && ${path} == $v][0]._id`
-        id = await client.fetch(query, {t: targetType, v: value})
+        id = await client.fetch(query, {t: targetType, v: code})
       }
 
       refCache.current.set(cacheKey, id || null)
       return id || null
     },
-    [client],
+    [client, stripPrefix],
   )
 
   const buildDoc = useCallback(
-    async (row: Row): Promise<{doc: Record<string, unknown>; unresolved: string[]}> => {
+    async (
+      row: Row,
+      importIds: Set<string>,
+    ): Promise<{doc: Record<string, unknown>; unresolved: string[]}> => {
       const doc: Record<string, unknown> = {_type: docType}
       const unresolved: string[] = []
 
@@ -226,7 +255,7 @@ export function BulkImportTool() {
 
         // Single reference — resolve to a real _id.
         if (field.type === 'reference') {
-          const id = await resolveRef(value, field.to, refMatch[schemaField])
+          const id = await resolveRef(value, field.to, refMatch[schemaField], importIds)
           if (id) {
             doc[schemaField] = {_type: 'reference', _ref: id}
           } else {
@@ -240,7 +269,7 @@ export function BulkImportTool() {
           const parts = value.split(/[;|]/).map((s) => s.trim()).filter(Boolean)
           const refs: any[] = []
           for (const part of parts) {
-            const id = await resolveRef(part, field.ofTo, refMatch[schemaField])
+            const id = await resolveRef(part, field.ofTo, refMatch[schemaField], importIds)
             if (id) {
               refs.push({_type: 'reference', _ref: id, _key: crypto.randomUUID().slice(0, 12)})
             } else {
@@ -284,6 +313,13 @@ export function BulkImportTool() {
 
     const dedupeCsvCol = Object.entries(mapping).find(([, sf]) => sf === dedupeField)?.[0]
 
+    // First pass: collect the bare code of every row's ID column. Created docs
+    // are keyed by this code, so cross-references inside the file resolve
+    // directly (independent of row order).
+    const idCol = Object.entries(mapping).find(([, sf]) => sf === 'id')?.[0]
+    const codeFor = (row: Row) => (idCol ? stripCode(row[idCol] ?? '', stripPrefix) : '')
+    const importIds = new Set<string>(rows.map(codeFor).filter(Boolean))
+
     let created = 0
     let updated = 0
     let skipped = 0
@@ -292,7 +328,7 @@ export function BulkImportTool() {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
-      const {doc, unresolved} = await buildDoc(row)
+      const {doc, unresolved} = await buildDoc(row, importIds)
       unresolved.forEach((u) => unresolvedAll.add(u))
 
       try {
@@ -317,8 +353,8 @@ export function BulkImportTool() {
           }
         }
 
-        const customId = row._id || row.id
-        doc._id = `drafts.${customId ? customId.trim() : crypto.randomUUID()}`
+        const code = codeFor(row)
+        doc._id = `drafts.${code || crypto.randomUUID()}`
         await client.create(doc as any)
         created++
       } catch (err) {
@@ -350,7 +386,7 @@ export function BulkImportTool() {
       setFileName('')
       setMapping({})
     }
-  }, [rows, docType, mapping, dedupeField, dedupeAction, buildDoc, findExisting, client])
+  }, [rows, docType, mapping, dedupeField, dedupeAction, stripPrefix, buildDoc, findExisting, client])
 
   return (
     <Box padding={4}>
@@ -421,6 +457,23 @@ export function BulkImportTool() {
                 reference. Pick <code>_id</code> if your CSV already contains document IDs. Unresolved
                 values are left empty (not imported as broken refs).
               </Text>
+              <Flex align="center" gap={2} paddingY={1}>
+                <Checkbox
+                  id="strip-prefix"
+                  checked={stripPrefix}
+                  onChange={(e) => setStripPrefix(e.currentTarget.checked)}
+                />
+                <Box>
+                  <Text size={1} as="label" htmlFor="strip-prefix">
+                    Strip <code>CODE - Label</code> prefix before matching
+                  </Text>
+                  <Text size={0} muted>
+                    Matches the bare code (e.g. <code>BB.WE.fx.B.C1 - Chasing Spring Birds</code> →{' '}
+                    <code>BB.WE.fx.B.C1</code>). Cross-references to other rows in this file resolve
+                    automatically.
+                  </Text>
+                </Box>
+              </Flex>
               <Stack space={2}>
                 {referenceFields.map((field) => {
                   const target = fieldMap[field].to || fieldMap[field].ofTo
