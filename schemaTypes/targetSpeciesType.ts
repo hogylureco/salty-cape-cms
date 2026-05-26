@@ -37,17 +37,12 @@ export const targetSpeciesType = defineType({
     }),
     defineField({
       name: 'image',
-      title: 'Image',
+      title: 'Featured Image',
       type: 'image',
       options: {hotspot: true},
       fields: [
         defineField({name: 'alt', title: 'Alt Text', type: 'string'}),
       ],
-    }),
-    defineField({
-      name: 'season',
-      title: 'Typical Season',
-      type: 'string',
     }),
   ],
   preview: {
