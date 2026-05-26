@@ -26,14 +26,17 @@ export const structureType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'featuredDiagramUrl',
+      title: 'Featured Diagram URL',
+      type: 'url',
+      validation: (Rule) => Rule.required().uri({
+      scheme: ['http', 'https'],
+  }),
+}),
+    defineField({
       name: 'description',
       title: 'Description',
       type: 'text',
-    }),
-    defineField({
-      name: 'icon',
-      title: 'Icon',
-      type: 'image',
     }),
   ],
   preview: {
