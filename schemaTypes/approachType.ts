@@ -30,6 +30,44 @@ export const approachType = defineType({
       title: 'Description',
       type: 'text',
     }),
+        defineField({
+      name: 'featuredDiagramUrl',
+      title: 'Featured Diagram URL',
+      type: 'url',
+      validation: (Rule) => Rule.required().uri({
+      scheme: ['http', 'https'],
+  }),
+}),
+        defineField({
+      name: 'zone',
+      title: 'Zone',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'zone'}]}],
+    }),
+        defineField({
+      name: 'method',
+      title: 'Method',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'method'}]}],
+    }),
+        defineField({
+      name: 'targetspecies',
+      title: 'Target Species',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
+    }),
+        defineField({
+      name: 'platform',
+      title: 'Platform',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'platform'}]}],
+    }),
+        defineField({
+      name: 'parentLure',
+      title: 'Parent Lure',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'parentLure'}]}],
+    }),
   ],
   preview: {
     select: {title: 'name'},
