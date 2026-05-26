@@ -201,6 +201,8 @@ export function BulkImportTool() {
   const [refFormat, setRefFormat] = useState<Record<string, RefFormat>>({})
   const [stripPrefix, setStripPrefix] = useState(true)
   const [createStubs, setCreateStubs] = useState(false)
+  const [replaceExisting, setReplaceExisting] = useState(true)
+  const [strengthen, setStrengthen] = useState(false)
   const [dedupeField, setDedupeField] = useState<string>('')
   const [dedupeAction, setDedupeAction] = useState<DedupeAction>('skip')
   const [status, setStatus] = useState<string>('')
@@ -493,6 +495,8 @@ export function BulkImportTool() {
     let skipped = 0
     const errors: string[] = []
     const unresolvedAll = new Set<string>()
+    // Docs we wrote this run, kept so a later strengthen pass can patch them.
+    const builtDocs: Record<string, unknown>[] = []
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -513,6 +517,7 @@ export function BulkImportTool() {
                 const baseId = existing._id.replace(/^drafts\./, '')
                 doc._id = `drafts.${baseId}`
                 await client.createOrReplace(doc as any)
+                builtDocs.push(doc)
                 updated++
                 continue
               }
@@ -523,7 +528,15 @@ export function BulkImportTool() {
 
         const id = idFor(row)
         doc._id = `drafts.${id || crypto.randomUUID()}`
-        await client.create(doc as any)
+        // Idempotent by default: createOrReplace overwrites a prior import of
+        // the same id (and replaces any stale references). Uncheck "Replace
+        // existing" to hard-create and surface an error if the id already exists.
+        if (replaceExisting) {
+          await client.createOrReplace(doc as any)
+        } else {
+          await client.create(doc as any)
+        }
+        builtDocs.push(doc)
         created++
       } catch (err) {
         errors.push(`Row ${i + 1}: ${(err as Error).message}`)
@@ -548,6 +561,51 @@ export function BulkImportTool() {
       }
     }
 
+    // Optional strengthen pass: remove `_weak` from references whose target now
+    // exists AS A PUBLISHED document. Strong refs require a published target, so
+    // we deliberately leave refs to draft-only docs (e.g. sibling spots from
+    // this same import) weak — strengthening those would fail validation.
+    let strengthened = 0
+    if (strengthen && builtDocs.length) {
+      const refArrayFields = schemaFieldNames.filter((n) => fieldMap[n].ofTo)
+      const allRefIds = new Set<string>()
+      for (const d of builtDocs) {
+        for (const f of refArrayFields) {
+          for (const r of (d[f] as any[]) || []) if (r?._ref) allRefIds.add(r._ref)
+        }
+      }
+      // Which of those exist as PUBLISHED docs (ids without a drafts. prefix)?
+      const publishedIds: string[] = await client.fetch(`*[_id in $ids]._id`, {
+        ids: [...allRefIds],
+      })
+      const published = new Set(publishedIds)
+      for (const d of builtDocs) {
+        const patch: Record<string, unknown> = {}
+        for (const f of refArrayFields) {
+          const arr = d[f] as any[] | undefined
+          if (!Array.isArray(arr)) continue
+          let touched = false
+          const next = arr.map((r) => {
+            if (r?._weak && r._ref && published.has(r._ref)) {
+              const {_weak, ...rest} = r
+              touched = true
+              return rest
+            }
+            return r
+          })
+          if (touched) patch[f] = next
+        }
+        if (Object.keys(patch).length) {
+          try {
+            await client.patch(d._id as string).set(patch).commit({autoGenerateArrayKeys: false})
+            strengthened++
+          } catch (err) {
+            errors.push(`Strengthen ${d._id}: ${(err as Error).message}`)
+          }
+        }
+      }
+    }
+
     setImporting(false)
 
     const prov = provisional.current.size
@@ -556,6 +614,7 @@ export function BulkImportTool() {
     if (updated) parts.push(`Updated ${updated}`)
     if (skipped) parts.push(`Skipped ${skipped}`)
     if (stubs) parts.push(`${stubs} placeholder${stubs === 1 ? '' : 's'}`)
+    if (strengthened) parts.push(`Strengthened ${strengthened}`)
     if (prov) parts.push(`${prov} weak ref${prov === 1 ? '' : 's'} pending`)
     if (unresolvedAll.size) parts.push(`${unresolvedAll.size} unresolved ref${unresolvedAll.size === 1 ? '' : 's'}`)
     if (errors.length) parts.push(`${errors.length} error${errors.length === 1 ? '' : 's'}`)
@@ -582,7 +641,22 @@ export function BulkImportTool() {
       setFileName('')
       setMapping({})
     }
-  }, [rows, docType, mapping, dedupeField, dedupeAction, stripPrefix, createStubs, buildDoc, findExisting, client])
+  }, [
+    rows,
+    docType,
+    mapping,
+    dedupeField,
+    dedupeAction,
+    stripPrefix,
+    createStubs,
+    replaceExisting,
+    strengthen,
+    schemaFieldNames,
+    fieldMap,
+    buildDoc,
+    findExisting,
+    client,
+  ])
 
   return (
     <Box padding={4}>
@@ -690,6 +764,25 @@ export function BulkImportTool() {
                 </Box>
               </Flex>
 
+              <Flex align="center" gap={2} paddingY={1}>
+                <Checkbox
+                  id="strengthen"
+                  checked={strengthen}
+                  onChange={(e) => setStrengthen(e.currentTarget.checked)}
+                />
+                <Box>
+                  <Text size={1} as="label" htmlFor="strengthen">
+                    Strengthen references after import
+                  </Text>
+                  <Text size={0} muted>
+                    After writing, removes the <code>weak</code> flag from references whose target
+                    now exists as a <em>published</em> doc (e.g. placeholders created above). Refs to
+                    draft-only docs — like sibling spots from this same import — stay weak, since a
+                    strong ref needs a published target.
+                  </Text>
+                </Box>
+              </Flex>
+
               <Stack space={3}>
                 {referenceFields.map((field) => {
                   const target = fieldMap[field].to || fieldMap[field].ofTo
@@ -738,15 +831,37 @@ export function BulkImportTool() {
         {csvHeaders.length > 0 && (
           <Card padding={4} radius={2} tone="primary" border>
             <Stack space={4}>
-              <Text size={1} weight="semibold">5. Deduplication (optional)</Text>
+              <Text size={1} weight="semibold">5. Write behavior</Text>
+
+              <Flex align="center" gap={2} paddingY={1}>
+                <Checkbox
+                  id="replace-existing"
+                  checked={replaceExisting}
+                  onChange={(e) => setReplaceExisting(e.currentTarget.checked)}
+                />
+                <Box>
+                  <Text size={1} as="label" htmlFor="replace-existing">
+                    Replace existing documents (re-import safe)
+                  </Text>
+                  <Text size={0} muted>
+                    Writes each row with <code>createOrReplace</code> keyed on its derived{' '}
+                    <code>_id</code>, so re-running overwrites a previous import and clears stale
+                    references instead of erroring with "document already exists". Note: this
+                    replaces all fields, so Studio-only edits (e.g. Capt Mike notes) are overwritten.
+                    Uncheck to hard-create.
+                  </Text>
+                </Box>
+              </Flex>
+
               <Text size={0} muted>
-                Pick a field to check against existing documents. If a match is found, choose what to do.
+                Deduplication (advanced): instead of keying on the derived id, match a field against
+                existing documents and choose what to do.
               </Text>
               <Grid columns={2} gap={3}>
                 <Stack space={2}>
                   <Label size={1}>Dedupe field</Label>
                   <Select value={dedupeField} onChange={(e) => setDedupeField(e.currentTarget.value)}>
-                    <option value="">— None (always create) —</option>
+                    <option value="">— None (key on derived id) —</option>
                     {schemaFieldNames
                       .filter((f) => ['string', 'slug', 'number'].includes(fieldMap[f].type))
                       .map((f) => (
