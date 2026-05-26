@@ -44,11 +44,6 @@ export const baitfishType = defineType({
         defineField({name: 'alt', title: 'Alt Text', type: 'string'}),
       ],
     }),
-    defineField({
-      name: 'season',
-      title: 'Peak Season',
-      type: 'string',
-    }),
   ],
   preview: {
     select: {title: 'name', subtitle: 'scientificName', media: 'image'},
