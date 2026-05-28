@@ -119,6 +119,29 @@ export const videoType = defineType({
       type: 'array',
       of: [{type: 'reference', to: [{type: 'method'}]}],
     }),
+
+        defineField({
+      name: 'approach',
+      title: 'Approach',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'approach'}]}],
+    }),
+
+    defineField({
+      name: 'structure',
+      title: 'Structure',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'structure'}]}],
+    }),
+
+    defineField({
+      name: 'microSeason',
+      title: 'Micro Season',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'microSeason'}]}],
+    }),
+
+    
      defineField({
       name: 'zone',
       title: 'Zone',
