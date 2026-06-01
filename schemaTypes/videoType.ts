@@ -38,7 +38,7 @@ export const videoType = defineType({
   options: {
     list: [
       { title: 'Salty Cape TV', value: 'saltycapetv' },
-      { title: 'How To Video', value: 'howtovideo' },
+      { title: 'Hogy Lure Company', value: 'hogylurecompany' },
     ],
     layout: 'dropdown', // or 'radio' for radio buttons
   },
