@@ -68,6 +68,12 @@ export const approachType = defineType({
       type: 'array',
       of: [{type: 'reference', to: [{type: 'parentLure'}]}],
     }),
+       defineField({
+      name: 'baitfish',
+      title: 'Baitfish',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'parentLure'}]}],
+    }),
   ],
   preview: {
     select: {title: 'name'},
