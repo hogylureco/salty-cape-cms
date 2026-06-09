@@ -26,17 +26,10 @@ export default defineConfig({
       title: 'Bulk Import',
       component: BulkImportTool,
     },
+    bulkJsonFieldImportTool,
   ],
   
 })
 
 
 
-export default defineConfig({
-  name: 'default',
-  title: 'Salty Cape',
-  projectId: 'y83nf1qy',
-  dataset: 'production',
-  // ...your plugins, schema, etc.
-  tools: (prev) => [...prev, bulkJsonFieldImportTool],
-})
