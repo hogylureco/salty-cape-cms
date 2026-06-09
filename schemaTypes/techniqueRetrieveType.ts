@@ -51,6 +51,21 @@ export const techniqueRetrieveType = defineType({
       type: 'array',
       of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
     }),
+
+        defineField({
+      name: 'approach',
+      title: 'Approach',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'approach'}]}],
+    }),
+
+        defineField({
+      name: 'structure',
+      title: 'Structure',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'structure'}]}],
+    }),
+    
     defineField({
       name: 'baitfish',
       title: 'Baitfish',
