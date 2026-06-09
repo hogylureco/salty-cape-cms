@@ -5,13 +5,18 @@
  * documents at once, by PATCHING (not replacing) so the rest of each document
  * is left intact. Designed as a companion to the CSV BulkImportTool.
  *
- * Register in sanity.config.ts:
+ * IMPORTANT: the import path in sanity.config.ts must match THIS file's name
+ * exactly (case-sensitive on Vercel/Linux). This file is bulkJsonFieldImportTool.tsx,
+ * so import it as:
  *
- *   import {bulkJsonFieldImportTool} from './tools/BulkJsonFieldImport'
- *   export default defineConfig({
- *     // ...
- *     tools: (prev) => [...prev, bulkJsonFieldImportTool],
- *   })
+ *   import {bulkJsonFieldImportTool} from './tools/bulkJsonFieldImportTool'
+ *
+ * and add it to your existing tools array:
+ *
+ *   tools: [
+ *     {name: 'bulk-import', title: 'Bulk Import', component: BulkImportTool},
+ *     bulkJsonFieldImportTool,
+ *   ],
  *
  * Expected input — a JSON array of records:
  *
@@ -29,18 +34,16 @@
  * of objects get `_key`s injected where missing; everything else is stored verbatim.
  */
 
-import {useCallback, useMemo, useState} from 'react'
+import {useCallback, useMemo, useState, type ChangeEvent} from 'react'
 import {useClient} from 'sanity'
 import {
   Badge,
   Box,
   Button,
   Card,
-  Checkbox,
   Code,
   Flex,
   Heading,
-  Inline,
   Label,
   Select,
   Spinner,
@@ -191,7 +194,7 @@ export function BulkJsonFieldImport() {
   const [committing, setCommitting] = useState(false)
   const [progress, setProgress] = useState(0)
 
-  const handleUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
@@ -415,7 +418,7 @@ export function BulkJsonFieldImport() {
                       {item.matched ? (
                         <CheckmarkIcon style={{color: 'green'}} />
                       ) : (
-                        <WarningOutlineIcon style={{color: '#b04' }} />
+                        <WarningOutlineIcon style={{color: '#b04'}} />
                       )}
                       <Text size={1} weight="semibold">
                         {item.match}
