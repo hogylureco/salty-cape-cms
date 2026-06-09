@@ -5,6 +5,7 @@ import {schemaTypes} from './schemaTypes'
 import {BulkImportTool} from './tools/BulkImportTool'
 import {richTablePlugin} from 'sanity-plugin-rich-table'
 import {media} from 'sanity-plugin-media'
+import {bulkJsonFieldImportTool} from './tools/BulkJsonFieldImport'
 
 export default defineConfig({
   name: 'default',
