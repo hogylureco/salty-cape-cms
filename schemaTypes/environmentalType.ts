@@ -1,7 +1,7 @@
 // schemaTypes/environmentalType.ts
 import {defineField, defineType} from 'sanity'
 
-export const zoneType = defineType({
+export const environmentalType = defineType({
   name: 'environmental',
   title: 'Environmental Factors',
   type: 'document',
