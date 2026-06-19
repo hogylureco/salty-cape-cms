@@ -39,5 +39,8 @@ export const schemaTypes = [
   videoType,
   modeType,
   microSeasonType,
+  environmentalType,
+  historicalType,
+  observationalType
   
 ]
