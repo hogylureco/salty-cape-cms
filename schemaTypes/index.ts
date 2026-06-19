@@ -16,6 +16,9 @@ import {techniqueRetrieveType} from './techniqueRetrieveType'
 import {videoType} from './videoType'
 import {modeType} from './modeType'
 import {microSeasonType} from './microSeasonType'
+import {environmentalType} from './environmentalType'
+import {historicalType} from './historicalType'
+import {observationalType} from './observationalType'
 
 export const schemaTypes = [
   spotType,
