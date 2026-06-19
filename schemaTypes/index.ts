@@ -19,7 +19,7 @@ import {microSeasonType} from './microSeasonType'
 import {environmentalType} from './environmentalType'
 import {historicalType} from './historicalType'
 import {observationalType} from './observationalType'
-import {gearPostType} from './observationalType'
+import {gearPostType} from './gearPostType'
 
 export const schemaTypes = [
   spotType,
