@@ -184,6 +184,6 @@ export const videoType = defineType({
     }),
   ],
   preview: {
-    select: {title: 'name', subtitle: 'region.name'},
+    select: {title: 'name', updatedAt: '_updatedAt',},
   },
 })
