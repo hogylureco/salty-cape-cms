@@ -184,6 +184,23 @@ export const videoType = defineType({
     }),
   ],
   preview: {
-    select: {title: 'name', updatedAt: '_updatedAt',},
+    select: {
+    title: 'name',
+    subtitle: 'region.name',
+    updatedAt: '_updatedAt',
+  },
+  prepare({title, subtitle, updatedAt}) {
+    const date = updatedAt
+      ? new Date(updatedAt).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      : 'never'
+    return {
+      title,
+      subtitle: `${subtitle ?? ''} · Updated ${date}`,
+    }
+  },
   },
 })
