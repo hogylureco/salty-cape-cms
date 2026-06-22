@@ -189,7 +189,7 @@ export const videoType = defineType({
     id: '_id',
     updatedAt: '_updatedAt',
   },
-  prepare({title, subtitle, updatedAt}) {
+  prepare({title, id, updatedAt}) {
     const date = updatedAt
       ? new Date(updatedAt).toLocaleDateString('en-US', {
           year: 'numeric',
@@ -199,7 +199,7 @@ export const videoType = defineType({
       : 'never'
     return {
       title,
-      subtitle: `${subtitle ?? ''} · Updated ${date}`,
+      subtitle: `${id} · Updated ${date}`,
     }
   },
   },
