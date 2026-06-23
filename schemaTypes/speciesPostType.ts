@@ -31,6 +31,12 @@ export const speciesPostType = defineType({
       type: 'array',
       of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
     }),
+       defineField({
+      name: 'baitfish',
+      title: 'Baitfish',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'baitfish'}]}],
+    }),
  defineField({
       name: 'description',
       title: 'Description',
