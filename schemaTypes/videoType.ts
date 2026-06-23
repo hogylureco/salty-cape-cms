@@ -186,7 +186,7 @@ export const videoType = defineType({
   preview: {
     select: {
     title: 'name',
-    id: '_id',
+    id: 'ID',
     updatedAt: '_updatedAt',
   },
   prepare({title, id, updatedAt}) {
