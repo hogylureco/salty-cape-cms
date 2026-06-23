@@ -19,10 +19,21 @@ export const speciesPostType = defineType({
       options: {source: 'name', maxLength: 96},
       validation: (Rule) => Rule.required(),
     }),
-    defineField({
+   defineField({
+      name: 'targetSpecies',
+      title: 'Target Species',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'targetSpecies'}]}],
+    }),
+ defineField({
       name: 'description',
       title: 'Description',
-      type: 'text',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
     }),
     defineField({
       name: 'image',
