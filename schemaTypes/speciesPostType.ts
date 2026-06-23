@@ -12,6 +12,12 @@ export const speciesPostType = defineType({
       type: 'string',
       validation: (Rule) => Rule.required(),
     }),
+        defineField({
+      name: 'name',
+      title: 'Name',
+      type: 'string',
+      validation: (Rule) => Rule.required(),
+    }),
     defineField({
       name: 'slug',
       title: 'Slug',
