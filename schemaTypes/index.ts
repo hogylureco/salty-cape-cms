@@ -20,6 +20,7 @@ import {environmentalType} from './environmentalType'
 import {historicalType} from './historicalType'
 import {observationalType} from './observationalType'
 import {gearPostType} from './gearPostType'
+import {gearPostType} from './spotPostType'
 
 export const schemaTypes = [
   spotType,
@@ -43,6 +44,7 @@ export const schemaTypes = [
   environmentalType,
   historicalType,
   observationalType,
-  gearPostType
+  gearPostType,
+  spotPostType
   
 ]
