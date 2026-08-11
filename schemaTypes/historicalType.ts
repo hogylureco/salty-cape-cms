@@ -25,6 +25,12 @@ export const historicalType = defineType({
       options: {source: 'name', maxLength: 96},
       validation: (Rule) => Rule.required(),
     }),
+        defineField({
+      name: 'zone',
+      title: 'Zone',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'zone'}]}],
+    }),
     defineField({
       name: 'description',
       title: 'Description',
