@@ -26,6 +26,12 @@ export const observationalType = defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'zone',
+      title: 'Zone',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'zone'}]}],
+    }),
+    defineField({
       name: 'description',
       title: 'Description',
       type: 'array',
