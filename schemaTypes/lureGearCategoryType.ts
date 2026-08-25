@@ -30,17 +30,11 @@ export const lureGearCategoryType = defineType({
   name: 'imageURL',
   title: 'Image URL',
   type: 'url',
-  validation: (Rule) => Rule.required().uri({
-    scheme: ['http', 'https'],
-  }),
 }),
         defineField({
   name: 'websitelink',
   title: 'Website Link',
   type: 'url',
-  validation: (Rule) => Rule.required().uri({
-    scheme: ['http', 'https'],
-  }),
 }),
 
         defineField({
