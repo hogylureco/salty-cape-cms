@@ -25,6 +25,30 @@ export const microSeasonType = defineType({
       options: {source: 'name', maxLength: 96},
       validation: (Rule) => Rule.required(),
     }),
+
+
+    defineField({
+  name: 'startDate',
+  title: 'Start Date',
+  type: 'date',
+  options: {dateFormat: 'YYYY-MM-DD'},
+  validation: (Rule) => Rule.required(),
+}),
+defineField({
+  name: 'endDate',
+  title: 'End Date',
+  type: 'date',
+  options: {dateFormat: 'YYYY-MM-DD'},
+  validation: (Rule) =>
+    Rule.required().min(Rule.valueOfField('startDate')).error('End date must be on or after start date'),
+}),
+defineField({
+  name: 'seasons',
+  title: 'Seasons',
+  type: 'array',
+  of: [{type: 'reference', to: [{type: 'season'}], weak: true}],
+}),
+    
     defineField({
       name: 'description',
       title: 'Description',
