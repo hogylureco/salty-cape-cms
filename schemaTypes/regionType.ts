@@ -25,6 +25,12 @@ export const regionType = defineType({
       options: {source: 'name', maxLength: 96},
       validation: (Rule) => Rule.required(),
     }),
+        defineField({
+      name: 'microSeason',
+      title: 'Micro Season',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'microSeason'}]}],
+    }),
     defineField({
       name: 'description',
       title: 'Description',
