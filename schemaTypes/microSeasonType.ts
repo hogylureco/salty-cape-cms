@@ -32,15 +32,12 @@ export const microSeasonType = defineType({
   title: 'Start Date',
   type: 'date',
   options: {dateFormat: 'YYYY-MM-DD'},
-  validation: (Rule) => Rule.required(),
 }),
 defineField({
   name: 'endDate',
   title: 'End Date',
   type: 'date',
   options: {dateFormat: 'YYYY-MM-DD'},
-  validation: (Rule) =>
-    Rule.required().min(Rule.valueOfField('startDate')).error('End date must be on or after start date'),
 }),
 defineField({
   name: 'seasons',
