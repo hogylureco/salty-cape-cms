@@ -40,6 +40,13 @@ export const blogPostType = defineType({
       of: [{type: 'reference', to: [{type: 'platform'}]}],
     }),
 
+            defineField({
+      name: 'zone',
+      title: 'Zone',
+      type: 'array',
+      of: [{type: 'reference', to: [{type: 'zone'}]}],
+    }),
+
 
             defineField({
       name: 'microSeason',
