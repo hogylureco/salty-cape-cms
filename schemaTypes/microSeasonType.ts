@@ -44,6 +44,7 @@ export const microSeasonType = defineType({
     list: [
       {title: 'Hub', value: 'hub'},
       {title: 'Region', value: 'region'},
+      {title: 'Region', value: 'report'},
     ],
     layout: 'dropdown', // omit this and you get radio buttons instead
   },
