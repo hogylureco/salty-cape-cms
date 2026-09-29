@@ -48,6 +48,12 @@ export const microSeasonType = defineType({
     layout: 'dropdown', // omit this and you get radio buttons instead
   },
 }),
+
+        defineField({
+      name: 'subtitle',
+      title: 'Subtitle',
+      type: 'string',
+    }),
  
     defineField({
   name: 'startDate',
