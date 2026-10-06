@@ -30,7 +30,6 @@ export const reportType = defineType({
       name: 'imageURL',
       title: 'Image URL',
       type: 'url',
-      validation: (Rule) => Rule.required().uri({
       scheme: ['http', 'https'],
   }),
 }),
