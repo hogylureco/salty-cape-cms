@@ -219,7 +219,12 @@ defineField({
     defineField({
       name: 'description',
       title: 'Description',
-      type: 'text',
+      type: 'array',
+      of: [
+        {type: 'block'},
+        {type: 'image', options: {hotspot: true}},
+        {type: 'richTableBlock'},
+      ],
     }),
   ],
   preview: {
