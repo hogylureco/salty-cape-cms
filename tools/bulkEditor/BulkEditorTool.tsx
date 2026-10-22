@@ -13,7 +13,8 @@ import type {SortingState} from '@tanstack/react-table'
 import {useSchema} from 'sanity'
 import {useRouter} from 'sanity/router'
 import {BulkBar} from './BulkBar'
-import {Grid} from './Grid'
+import {ExportMenu} from './exporting'
+import {compareValues, Grid} from './Grid'
 import {ROW_LIMIT, type ColumnFilter, type GridFilters} from './groq'
 import {deriveColumns, listDocumentTypes, unhandledColumns, type ColumnDef} from './schemaColumns'
 import {ColumnPicker, FilterControls, RowCount, SearchBox, StatusToggle, type StatusFilter} from './Toolbar'
@@ -53,6 +54,21 @@ function TypeView({typeName, typeTitle}: {typeName: string; typeTitle: string}) 
       return statusFilter === 'drafts' ? s?.draft : s?.published && !s.draft
     })
   }, [data.rows, data.status, statusFilter])
+
+  // Ids in the order the grid shows them (same comparison as the grid's sort), for exports.
+  const viewIds = useMemo(() => {
+    if (!sorting.length) return shownRows.map((r) => r._id)
+    return [...shownRows]
+      .sort((a, b) => {
+        for (const s of sorting) {
+          const d = compareValues(a[s.id], b[s.id])
+          if (d) return s.desc ? -d : d
+        }
+        return 0
+      })
+      .map((r) => r._id)
+  }, [shownRows, sorting])
+  const selectedInViewOrder = useMemo(() => viewIds.filter((id) => selected.has(id)), [viewIds, selected])
 
   // Selection only ever covers rows in the current result, so a bulk action never reaches
   // documents the filters are hiding.
@@ -185,6 +201,7 @@ function TypeView({typeName, typeTitle}: {typeName: string; typeTitle: string}) 
             }}
           />
           <ColumnPicker columns={columns} visibleKeys={visibleKeys} defaultKeys={defaultKeys} onChange={setVisibleKeys} />
+          <ExportMenu id="bulk-editor-export-view" typeName={typeName} ids={viewIds} columns={visible} refs={refs} scope="view" />
           <Box flex={1} />
           <RowCount
             shown={shownRows.length}
@@ -199,7 +216,7 @@ function TypeView({typeName, typeTitle}: {typeName: string; typeTitle: string}) 
       {selected.size > 0 && (
         <BulkBar
           typeName={typeName}
-          selectedIds={[...selected]}
+          selectedIds={selectedInViewOrder}
           status={data.status}
           columns={columns}
           exportColumns={visible}

@@ -59,3 +59,14 @@ export function toCsv(
   // BOM so Excel opens UTF-8 (accents, en dashes in ids) correctly.
   return `﻿${lines.join('\r\n')}\r\n`
 }
+
+/** Full documents as pretty-printed JSON (an array, one object per document). */
+export function toJson(docs: Record<string, unknown>[]): string {
+  return `${JSON.stringify(docs, null, 2)}\n`
+}
+
+/** `*[_id in $ids]` returns documents in no particular order; put them back in `ids` order. */
+export function orderByIds<T extends {_id: string}>(docs: T[], ids: string[]): T[] {
+  const byId = new Map(docs.map((d) => [d._id, d]))
+  return ids.map((id) => byId.get(id)).filter((d): d is T => Boolean(d))
+}

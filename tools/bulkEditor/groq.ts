@@ -118,6 +118,9 @@ export function buildRowsQuery(
 /** Every document id of the type, raw perspective: drafts.<id>, <id> and versions.*. */
 export const STATUS_QUERY = `*[_type == $type]._id`
 
+/** Whole documents for JSON export, drafts perspective: the draft where one exists. */
+export const FULL_EXPORT_QUERY = `*[_id in $ids]`
+
 export function buildExportQuery(columns: ColumnDef[]): string {
   return `*[_id in $ids] ${rowProjection(columns, {export: true})}`
 }

@@ -2,17 +2,15 @@ import {useMemo, useState} from 'react'
 import {Badge, Box, Button, Card, Checkbox, Dialog, Flex, Select, Spinner, Stack, Text, TextInput} from '@sanity/ui'
 import {useToast} from '@sanity/ui/toast'
 import {CloseIcon} from '@sanity/icons/Close'
-import {DownloadIcon} from '@sanity/icons/Download'
 import {EditIcon} from '@sanity/icons/Edit'
 import {PublishIcon} from '@sanity/icons/Publish'
 import {TrashIcon} from '@sanity/icons/Trash'
 import {UnpublishIcon} from '@sanity/icons/Unpublish'
 import {bulkPatch, chunk, editAction, planBulk, type BulkKind, type DocStatus} from './actions'
-import {toCsv} from './csv'
 import {FieldValueInput} from './editors'
-import {buildExportQuery} from './groq'
+import {ExportMenu} from './exporting'
 import type {ColumnDef} from './schemaColumns'
-import {useBulkClient, useRefIndex, type RefIndex, type Row} from './useBulkData'
+import {useBulkClient, useRefIndex, type RefIndex} from './useBulkData'
 
 type DialogKind = 'set' | BulkKind | null
 
@@ -57,40 +55,15 @@ export function BulkBar({
   selectedIds: string[]
   status: Map<string, DocStatus>
   columns: ColumnDef[]
-  /** Columns written to CSV: the visible ones, in grid order. */
+  /** Columns written to CSV: the visible ones, in grid order. Ids arrive in grid order too. */
   exportColumns: ColumnDef[]
   refs: RefIndex
   onClear: () => void
   onDone: () => void
 }) {
   const client = useBulkClient()
-  const toast = useToast()
   const [dialog, setDialog] = useState<DialogKind>(null)
-  const [exporting, setExporting] = useState(false)
   const count = selectedIds.length
-
-  const exportCsv = async () => {
-    setExporting(true)
-    try {
-      const rows = await client.fetch<Row[]>(
-        buildExportQuery(exportColumns),
-        {ids: selectedIds},
-        {perspective: 'drafts', tag: 'bulk-editor.export'},
-      )
-      const csv = toCsv(exportColumns, rows, (ref) => refs.byId.get(ref))
-      const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${typeName}-${new Date().toISOString().slice(0, 10)}.csv`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      toast.push({status: 'success', title: `Exported ${plural(rows.length, 'row')}`})
-    } catch (err) {
-      toast.push({status: 'error', title: 'Export failed', description: (err as Error).message})
-    } finally {
-      setExporting(false)
-    }
-  }
 
   const finish = () => {
     setDialog(null)
@@ -106,14 +79,13 @@ export function BulkBar({
         <Button text="Set field value…" icon={EditIcon} mode="ghost" fontSize={1} padding={2} onClick={() => setDialog('set')} />
         <Button text="Publish" icon={PublishIcon} mode="ghost" fontSize={1} padding={2} onClick={() => setDialog('publish')} />
         <Button text="Unpublish" icon={UnpublishIcon} mode="ghost" fontSize={1} padding={2} onClick={() => setDialog('unpublish')} />
-        <Button
-          text="Export CSV"
-          icon={exporting ? Spinner : DownloadIcon}
-          mode="ghost"
-          fontSize={1}
-          padding={2}
-          disabled={exporting}
-          onClick={exportCsv}
+        <ExportMenu
+          id="bulk-editor-export-selected"
+          typeName={typeName}
+          ids={selectedIds}
+          columns={exportColumns}
+          refs={refs}
+          scope="selected"
         />
         <Button text="Delete…" icon={TrashIcon} mode="ghost" tone="critical" fontSize={1} padding={2} onClick={() => setDialog('delete')} />
         <Box flex={1} />

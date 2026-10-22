@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import {test} from 'node:test'
 import {evaluate, parse} from 'groq-js'
 import {buildEdit, chunk, deleteAction, editAction, planBulk, splitRefArray, statusFromIds} from './actions.ts'
-import {toCsv} from './csv.ts'
-import {buildExportQuery, buildRefIndexQuery, buildRowsQuery, type GridFilters} from './groq.ts'
+import {orderByIds, toCsv, toJson} from './csv.ts'
+import {buildExportQuery, buildRefIndexQuery, buildRowsQuery, FULL_EXPORT_QUERY, type GridFilters} from './groq.ts'
 import type {ColumnDef} from './schemaColumns.ts'
 
 const col = (key: string, kind: ColumnDef['kind'], extra: Partial<ColumnDef> = {}): ColumnDef => ({
@@ -173,4 +173,13 @@ test('a string list stored as a single string becomes a proper list on edit', ()
 test('csv marks invalid list items instead of failing', () => {
   const csv = toCsv([columns[4], columns[5]], [{_id: 'm', zone: [null, 'Fall', {_ref: 'z1'}], platform: 'boat'}], () => ({title: 'Inshore'}))
   assert.equal(csv.split('\r\n')[1], 'm,null (invalid); Fall (invalid); Inshore,boat')
+})
+
+test('json export returns whole documents in view order', async () => {
+  const params = {ids: ['b', 'a', 'gone']}
+  const docs = await (await evaluate(parse(FULL_EXPORT_QUERY, {params}), {dataset, params})).get()
+  const ordered = orderByIds(docs, params.ids)
+  assert.deepEqual(ordered.map((d: any) => d._id), ['b', 'a'])
+  assert.deepEqual(ordered[1].notes, dataset[1].notes) // every field, not just visible columns
+  assert.deepEqual(JSON.parse(toJson(ordered)), ordered)
 })
