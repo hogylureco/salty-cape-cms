@@ -9,7 +9,8 @@
     "deploy": "sanity deploy",
     "deploy-graphql": "sanity graphql deploy",
     "dev": "sanity dev",
-    "start": "sanity start"
+    "start": "sanity start",
+    "test:bulk-editor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/bulkEditor/*.test.ts"
   },
   "keywords": [
     "sanity"
@@ -17,6 +18,8 @@
   "dependencies": {
     "@portabletext/editor": "8.2.3",
     "@sanity/vision": "^6.18.0",
+    "@tanstack/react-table": "8.21.3",
+    "@tanstack/react-virtual": "3.14.13",
     "papaparse": "^5.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
