@@ -6,6 +6,7 @@ import {BulkImportTool} from './tools/BulkImportTool'
 import {richTablePlugin} from 'sanity-plugin-rich-table'
 import {media} from 'sanity-plugin-media'
 import {bulkJsonFieldImportTool} from './tools/bulkJsonFieldImportTool'
+import {bulkEditorTool} from './tools/bulkEditor'
 
 export default defineConfig({
   name: 'default',
@@ -27,6 +28,7 @@ export default defineConfig({
       component: BulkImportTool,
     },
     bulkJsonFieldImportTool,
+    bulkEditorTool,
   ],
   
 })
