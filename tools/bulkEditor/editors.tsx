@@ -6,7 +6,7 @@
 import {useMemo, useState, type KeyboardEvent} from 'react'
 import {Badge, Box, Button, Card, Checkbox, Flex, Select, Stack, Text, TextArea, TextInput} from '@sanity/ui'
 import {CloseIcon} from '@sanity/icons/Close'
-import type {RefValue} from './actions'
+import {isRef, splitRefArray, splitStringArray} from './actions'
 import type {ColumnDef} from './schemaColumns'
 import type {RefIndex, RefTarget} from './useBulkData'
 
@@ -376,9 +376,9 @@ export function FieldValueInput({
 
 /** Editor value for a row's current field value (inverse of the row shape the grid fetches). */
 export function editorValueOf(col: ColumnDef, rowValue: unknown): unknown {
-  if (col.kind === 'reference') return (rowValue as RefValue | null)?._ref ?? null
-  if (col.kind === 'referenceArray') return ((rowValue as RefValue[] | null) ?? []).map((r) => r._ref).filter(Boolean)
-  if (col.kind === 'stringArray' || col.kind === 'stringListArray') return (rowValue as string[] | null) ?? []
+  if (col.kind === 'reference') return isRef(rowValue) ? rowValue._ref : null
+  if (col.kind === 'referenceArray') return splitRefArray(rowValue).refs.map((r) => r._ref)
+  if (col.kind === 'stringArray' || col.kind === 'stringListArray') return splitStringArray(rowValue).values
   return rowValue ?? null
 }
 

@@ -3,7 +3,7 @@
  * the schema in the Bulk Import tool), references are written as their target's title, and
  * Portable Text as plain text.
  */
-import type {RefValue} from './actions.ts'
+import {isRef, type RefValue} from './actions.ts'
 import type {ColumnDef} from './schemaColumns.ts'
 
 export interface RefLabel {
@@ -32,10 +32,15 @@ export function exportValue(
     case 'reference':
       return refTitle(value as RefValue)
     case 'referenceArray':
-      return (value as RefValue[]).map(refTitle).filter(Boolean).join('; ')
+      return (Array.isArray(value) ? value : [])
+        .map((item) => (isRef(item) ? refTitle(item) : `${typeof item === 'string' ? item : JSON.stringify(item)} (invalid)`))
+        .filter(Boolean)
+        .join('; ')
     case 'stringArray':
     case 'stringListArray':
-      return (value as string[]).join('; ')
+      return (Array.isArray(value) ? value : [value])
+        .map((item) => (typeof item === 'string' ? item : `${JSON.stringify(item)} (invalid)`))
+        .join('; ')
     default:
       return value as string | number | boolean
   }

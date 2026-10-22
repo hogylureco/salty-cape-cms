@@ -2,11 +2,11 @@
  * Grid cells. Each editable cell's focusable element carries `data-cell="<row>:<col>"` so
  * Enter can move focus down a row; Tab uses the browser's own order; Esc cancels an edit.
  */
-import {createContext, useContext, useState, type KeyboardEvent} from 'react'
+import {Component, createContext, useContext, useState, type KeyboardEvent, type ReactNode} from 'react'
 import {Box, Button, Card, Checkbox, Flex, Select, Text, TextArea, TextInput, useClickOutsideEvent} from '@sanity/ui'
 import {Popover} from '@sanity/ui/popover'
 import {IntentLink} from 'sanity/router'
-import type {RefValue} from './actions'
+import {isRef, splitRefArray, splitStringArray} from './actions'
 import {
   editorValueOf,
   isoToLocalInput,
@@ -163,22 +163,25 @@ function BooleanCell({row, col, cellId}: CellProps) {
   )
 }
 
-function refIdsOf(col: ColumnDef, v: unknown): string[] {
-  if (col.kind === 'reference') return (v as RefValue | null)?._ref ? [(v as RefValue)._ref] : []
-  return ((v as RefValue[] | null) ?? []).map((r) => r?._ref).filter(Boolean)
+function refIdsOf(col: ColumnDef, v: unknown): {ids: string[]; invalid: number} {
+  if (col.kind === 'reference') return {ids: isRef(v) ? [v._ref] : [], invalid: 0}
+  const {refs, invalid} = splitRefArray(v)
+  return {ids: refs.map((r) => r._ref), invalid: invalid.length}
 }
 
 function CellPreview({row, col, refs}: {row: Row; col: ColumnDef; refs: RefIndex}) {
   const v = row[col.key]
   if (col.kind === 'reference' || col.kind === 'referenceArray') {
-    const ids = refIdsOf(col, v)
-    if (!ids.length) return <Text size={1} muted>—</Text>
+    const {ids, invalid} = refIdsOf(col, v)
+    if (!ids.length && !invalid) return <Text size={1} muted>—</Text>
     const missing = ids.filter((id) => refLabel(id, refs).missing).length
     return (
       <Flex gap={1} align="center" style={{minWidth: 0, overflow: 'hidden'}}>
-        <Box style={{minWidth: 0, flexShrink: 1}}>
-          <RefChip id={ids[0]} refs={refs} />
-        </Box>
+        {ids.length > 0 && (
+          <Box style={{minWidth: 0, flexShrink: 1}}>
+            <RefChip id={ids[0]} refs={refs} />
+          </Box>
+        )}
         {ids.length > 1 && (
           <Text size={1} muted style={{flexShrink: 0}}>
             +{ids.length - 1}
@@ -189,19 +192,47 @@ function CellPreview({row, col, refs}: {row: Row; col: ColumnDef; refs: RefIndex
             <Text size={0}>{missing} missing</Text>
           </Card>
         )}
+        {invalid > 0 && (
+          <Card
+            tone="critical"
+            radius={2}
+            paddingX={1}
+            paddingY={1}
+            style={{flexShrink: 0}}
+            title="Items in this list that aren't references (e.g. left over from an import). Editing keeps them; fix them in the document editor."
+          >
+            <Text size={0}>{invalid} invalid</Text>
+          </Card>
+        )}
       </Flex>
     )
   }
-  const items = (v as string[] | null) ?? []
-  if (!items.length) return <Text size={1} muted>—</Text>
+  const {values, invalid} = splitStringArray(v)
+  if (!values.length && !invalid.length) return <Text size={1} muted>—</Text>
   const titles =
     col.kind === 'stringListArray'
-      ? items.map((i) => col.options?.find((o) => String(o.value) === i)?.title ?? i)
-      : items
+      ? values.map((i) => col.options?.find((o) => String(o.value) === i)?.title ?? i)
+      : values
   return (
-    <Text size={1} textOverflow="ellipsis">
-      {titles.join(', ')}
-    </Text>
+    <Flex gap={1} align="center" style={{minWidth: 0, overflow: 'hidden'}}>
+      <Box flex={1} style={{minWidth: 0}}>
+        <Text size={1} textOverflow="ellipsis">
+          {titles.join(', ')}
+        </Text>
+      </Box>
+      {invalid.length > 0 && (
+        <Card
+          tone="critical"
+          radius={2}
+          paddingX={1}
+          paddingY={1}
+          style={{flexShrink: 0}}
+          title="Items in this list that aren't text. Editing keeps them; fix them in the document editor."
+        >
+          <Text size={0}>{invalid.length} invalid</Text>
+        </Card>
+      )}
+    </Flex>
   )
 }
 
@@ -313,7 +344,33 @@ function SummaryCell({row, col}: CellProps) {
   )
 }
 
+/** Keeps one cell with unexpected data from taking down the whole Studio. */
+class CellErrorBoundary extends Component<{children: ReactNode; label: string}, {error: Error | null}> {
+  state = {error: null as Error | null}
+  static getDerivedStateFromError(error: Error) {
+    return {error}
+  }
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <Card tone="critical" style={{height: '100%'}} title={`${this.props.label}: ${this.state.error.message}`}>
+        <Flex align="center" paddingX={2} style={{height: '100%'}}>
+          <Text size={1}>Can’t display</Text>
+        </Flex>
+      </Card>
+    )
+  }
+}
+
 export function Cell(props: CellProps) {
+  return (
+    <CellErrorBoundary label={props.col.key}>
+      <CellBody {...props} />
+    </CellErrorBoundary>
+  )
+}
+
+function CellBody(props: CellProps) {
   switch (props.col.kind) {
     case 'select':
       return <SelectCell {...props} />

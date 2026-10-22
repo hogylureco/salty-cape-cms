@@ -25,7 +25,9 @@ export function columnProjection(col: ColumnDef, opts: {export?: boolean} = {}):
     case 'reference':
       return `"${k}": ${k}{_ref, _weak}`
     case 'referenceArray':
-      return `"${k}": ${k}[]{_key, _ref, _weak}`
+      // Fetched as stored: a projection would turn non-reference items (nulls, strings from
+      // imports) into null, and an edit could then not write them back.
+      return k
     case 'summary':
       switch (col.summary) {
         case 'portableText':

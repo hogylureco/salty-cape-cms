@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
 import {evaluate, parse} from 'groq-js'
-import {buildEdit, chunk, deleteAction, editAction, planBulk, statusFromIds} from './actions.ts'
+import {buildEdit, chunk, deleteAction, editAction, planBulk, splitRefArray, statusFromIds} from './actions.ts'
 import {toCsv} from './csv.ts'
 import {buildExportQuery, buildRefIndexQuery, buildRowsQuery, type GridFilters} from './groq.ts'
 import type {ColumnDef} from './schemaColumns.ts'
@@ -57,7 +57,7 @@ test('rows query parses and projects visible columns', async () => {
   assert.equal(res.total, 2)
   const a = res.rows.find((r: any) => r._id === 'a')
   assert.equal(a.slug, 'west-end')
-  assert.deepEqual(a.zone, [{_key: 'k1', _ref: 'z1', _weak: true}])
+  assert.deepEqual(a.zone, [{_key: 'k1', _ref: 'z1', _type: 'reference', _weak: true}])
   assert.deepEqual(a.notes, {count: 1, text: 'Fish the rip on the ebb.'})
 })
 
@@ -139,4 +139,38 @@ test('csv uses field-name headers, ref titles and escapes', () => {
     (ref) => (ref === 'z1' ? {title: 'Inshore'} : undefined),
   )
   assert.equal(csv, '﻿_id,name,zone,notes\r\na,"West, End",Inshore; gone (missing),"Line ""one"""\r\n')
+})
+
+// Imported data can hold nulls or plain strings where references or strings belong.
+// Reading must not crash, and editing must write those items back rather than drop them.
+test('malformed reference arrays are read safely and kept on edit', async () => {
+  const messy = [null, 'Fall', {_key: 'k1', _ref: 'z1', _type: 'reference'}]
+  assert.deepEqual(splitRefArray(messy), {refs: [{_key: 'k1', _ref: 'z1', _type: 'reference'}], invalid: [null, 'Fall']})
+  assert.deepEqual(splitRefArray({_ref: 'z1'}).refs, [{_ref: 'z1'}])
+  assert.deepEqual(splitRefArray('Fall'), {refs: [], invalid: ['Fall']})
+
+  const edit = buildEdit(columns[4], ['z1', 'z2'], messy)!
+  const written = edit.patch.set!.zone as any[]
+  assert.deepEqual(written.slice(2), [null, 'Fall'])
+  assert.equal(written[0]._key, 'k1')
+  assert.equal(buildEdit(columns[4], ['z1'], messy), null)
+
+  // The grid query returns such items as stored, not as nulls from a projection.
+  const ds = [{_id: 'm', _type: 'spot', zone: messy}]
+  const {query, params} = buildRowsQuery('spot', [columns[4]], columns, {search: '', columns: {}})
+  const res = await (await evaluate(parse(query, {params}), {dataset: ds, params})).get()
+  assert.deepEqual(res.rows[0].zone, messy)
+})
+
+test('a string list stored as a single string becomes a proper list on edit', () => {
+  const edit = buildEdit(columns[5], ['boat', 'shore'], 'boat')!
+  assert.deepEqual(edit.patch.set, {platform: ['boat', 'shore']})
+  const kept = buildEdit(columns[5], ['boat', 'shore'], ['boat', 7])!
+  assert.deepEqual(kept.patch.set, {platform: ['boat', 'shore', 7]})
+  assert.equal(buildEdit(columns[5], ['boat'], ['boat', 7]), null)
+})
+
+test('csv marks invalid list items instead of failing', () => {
+  const csv = toCsv([columns[4], columns[5]], [{_id: 'm', zone: [null, 'Fall', {_ref: 'z1'}], platform: 'boat'}], () => ({title: 'Inshore'}))
+  assert.equal(csv.split('\r\n')[1], 'm,null (invalid); Fall (invalid); Inshore,boat')
 })

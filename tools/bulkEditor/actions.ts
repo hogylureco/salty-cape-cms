@@ -46,6 +46,35 @@ export function statusFromIds(ids: string[]): Map<string, DocStatus> {
   return map
 }
 
+export function isRef(item: unknown): item is RefValue {
+  return item !== null && typeof item === 'object' && typeof (item as RefValue)._ref === 'string'
+}
+
+/**
+ * Split a stored reference array into real references and everything else. Imported data can
+ * hold nulls or plain strings in a reference array; those are kept, never dropped, on edit.
+ */
+export function splitRefArray(value: unknown): {refs: RefValue[]; invalid: unknown[]} {
+  const items = asItems(value)
+  return {refs: items.filter(isRef), invalid: items.filter((item) => !isRef(item))}
+}
+
+/** Same for string arrays: non-string items are kept, never dropped, on edit. */
+export function splitStringArray(value: unknown): {values: string[]; invalid: unknown[]} {
+  const items = asItems(value)
+  return {
+    values: items.filter((item): item is string => typeof item === 'string'),
+    invalid: items.filter((item) => typeof item !== 'string'),
+  }
+}
+
+// A single value stored where an array belongs is treated as a one-item array, so the next
+// edit writes it back as a proper array instead of losing it.
+function asItems(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  return value === null || value === undefined ? [] : [value]
+}
+
 const isEmpty = (v: unknown) =>
   v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
 
@@ -80,20 +109,23 @@ export function buildEdit(
       return {patch: {set: {[k]: {_type: 'reference', ...ref}}}, rowValue: ref}
     }
     case 'referenceArray': {
-      const prevItems = (Array.isArray(prev) ? prev : []) as RefValue[]
+      const {refs: prevRefs, invalid} = splitRefArray(prev)
       const ids = next as string[]
-      if (ids.length === prevItems.length && ids.every((id, i) => prevItems[i]?._ref === id)) return null
+      if (ids.length === prevRefs.length && ids.every((id, i) => prevRefs[i]._ref === id)) return null
       // Keep the _key of refs that stay, so Studio's array editing and history line up.
-      const keyByRef = new Map(prevItems.map((r) => [r._ref, r._key]))
-      const items = ids.map((id) => refOf(col, id, keyByRef.get(id) ?? randomKey()))
-      return {patch: {set: {[k]: items.map((r) => ({_type: 'reference', ...r}))}}, rowValue: items}
+      const keyByRef = new Map(prevRefs.map((r) => [r._ref, r._key]))
+      const items = ids.map((id) => ({_type: 'reference', ...refOf(col, id, keyByRef.get(id) ?? randomKey())}))
+      // Items that aren't references are written back untouched, after the references.
+      const all = [...items, ...invalid]
+      return {patch: {set: {[k]: all}}, rowValue: all}
     }
     case 'stringArray':
     case 'stringListArray': {
-      const prevArr = Array.isArray(prev) ? prev : []
+      const {values: prevValues, invalid} = splitStringArray(prev)
       const arr = next as string[]
-      if (arr.length === prevArr.length && arr.every((v, i) => v === prevArr[i])) return null
-      return {patch: {set: {[k]: arr}}, rowValue: arr}
+      if (Array.isArray(prev) && arr.length === prevValues.length && arr.every((v, i) => v === prevValues[i])) return null
+      const all = [...arr, ...invalid]
+      return {patch: {set: {[k]: all}}, rowValue: all}
     }
     default:
       if (next === prev) return null
