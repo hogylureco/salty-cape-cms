@@ -30,9 +30,8 @@ export const reportType = defineType({
       name: 'imageURL',
       title: 'Image URL',
       type: 'url',
-      scheme: ['http', 'https'],
+      validation: (Rule) => Rule.uri({scheme: ['http', 'https']}),
   }),
-}),
  
     defineField({
   name: 'reportDate',

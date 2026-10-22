@@ -74,7 +74,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Code,
   Flex,
   Heading,
   Label,
@@ -83,9 +82,15 @@ import {
   Stack,
   Text,
   TextArea,
-  useToast,
 } from '@sanity/ui'
-import {CheckmarkIcon, PlayIcon, SearchIcon, TrashIcon, UploadIcon, WarningOutlineIcon} from '@sanity/icons'
+import {Code} from '@sanity/ui/code'
+import {useToast} from '@sanity/ui/toast'
+import {CheckmarkIcon} from '@sanity/icons/Checkmark'
+import {PlayIcon} from '@sanity/icons/Play'
+import {SearchIcon} from '@sanity/icons/Search'
+import {TrashIcon} from '@sanity/icons/Trash'
+import {UploadIcon} from '@sanity/icons/Upload'
+import {WarningOutlineIcon} from '@sanity/icons/WarningOutline'
 
 const API_VERSION = '2024-10-01'
 // One stable object: useClient() hands back a new client whenever this object's identity changes.
