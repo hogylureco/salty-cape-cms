@@ -660,11 +660,11 @@ export function BulkImportTool() {
 
   return (
     <Box padding={4}>
-      <Stack space={5}>
+      <Stack gap={5}>
         <Heading size={2}>Bulk Import</Heading>
 
         <Card padding={4} radius={2} tone="primary" border>
-          <Stack space={3}>
+          <Stack gap={3}>
             <Text size={1} weight="semibold">1. Choose document type</Text>
             <Select value={docType} onChange={(e) => setDocType(e.currentTarget.value)}>
               {importableTypes.length === 0 ? (
@@ -679,7 +679,7 @@ export function BulkImportTool() {
         </Card>
 
         <Card padding={4} radius={2} tone="primary" border>
-          <Stack space={3}>
+          <Stack gap={3}>
             <Text size={1} weight="semibold">2. Upload CSV</Text>
             <input type="file" accept=".csv" onChange={handleFile} />
             {fileName && <Text size={1} muted>Selected: {fileName} ({rows.length} rows)</Text>}
@@ -688,14 +688,14 @@ export function BulkImportTool() {
 
         {csvHeaders.length > 0 && (
           <Card padding={4} radius={2} tone="primary" border>
-            <Stack space={4}>
+            <Stack gap={4}>
               <Text size={1} weight="semibold">3. Map CSV columns to schema fields</Text>
               <Text size={0} muted>
                 Auto-matched where names are similar. Pick "— Skip —" to ignore a column.
               </Text>
-              <Stack space={2}>
+              <Stack gap={2}>
                 {csvHeaders.map((header) => (
-                  <Grid key={header} columns={2} gap={3}>
+                  <Grid key={header} gridTemplateColumns={2} gap={3}>
                     <Box>
                       <Text size={1} style={{fontFamily: 'monospace'}}>{header}</Text>
                     </Box>
@@ -719,7 +719,7 @@ export function BulkImportTool() {
 
         {csvHeaders.length > 0 && referenceFields.length > 0 && (
           <Card padding={4} radius={2} tone="primary" border>
-            <Stack space={4}>
+            <Stack gap={4}>
               <Text size={1} weight="semibold">4. Resolve references</Text>
               <Text size={0} muted>
                 For each reference field, pick which field on the <em>target</em> document to match
@@ -783,13 +783,13 @@ export function BulkImportTool() {
                 </Box>
               </Flex>
 
-              <Stack space={3}>
+              <Stack gap={3}>
                 {referenceFields.map((field) => {
                   const target = fieldMap[field].to || fieldMap[field].ofTo
                   const isArray = Boolean(fieldMap[field].ofTo)
                   const mapped = Object.values(mapping).includes(field)
                   return (
-                    <Grid key={field} columns={2} gap={3}>
+                    <Grid key={field} gridTemplateColumns={2} gap={3}>
                       <Box>
                         <Flex align="center" gap={2}>
                           <Text size={1} style={{fontFamily: 'monospace'}}>{field}</Text>
@@ -798,7 +798,7 @@ export function BulkImportTool() {
                         </Flex>
                         <Text size={0} muted>→ {target}</Text>
                       </Box>
-                      <Stack space={2}>
+                      <Stack gap={2}>
                         <Select
                           value={refMatch[field] || '_id'}
                           onChange={(e) => updateRefMatch(field, e.currentTarget.value)}
@@ -830,7 +830,7 @@ export function BulkImportTool() {
 
         {csvHeaders.length > 0 && (
           <Card padding={4} radius={2} tone="primary" border>
-            <Stack space={4}>
+            <Stack gap={4}>
               <Text size={1} weight="semibold">5. Write behavior</Text>
 
               <Flex align="center" gap={2} paddingY={1}>
@@ -857,8 +857,8 @@ export function BulkImportTool() {
                 Deduplication (advanced): instead of keying on the derived id, match a field against
                 existing documents and choose what to do.
               </Text>
-              <Grid columns={2} gap={3}>
-                <Stack space={2}>
+              <Grid gridTemplateColumns={2} gap={3}>
+                <Stack gap={2}>
                   <Label size={1}>Dedupe field</Label>
                   <Select value={dedupeField} onChange={(e) => setDedupeField(e.currentTarget.value)}>
                     <option value="">— None (key on derived id) —</option>
@@ -869,7 +869,7 @@ export function BulkImportTool() {
                       ))}
                   </Select>
                 </Stack>
-                <Stack space={2}>
+                <Stack gap={2}>
                   <Label size={1}>When duplicate found</Label>
                   <Select
                     value={dedupeAction}
@@ -897,7 +897,7 @@ export function BulkImportTool() {
         )}
 
         {rows.length > 0 && (
-          <Stack space={3}>
+          <Stack gap={3}>
             <Text size={1} weight="semibold">Preview (first 5 rows)</Text>
             <Card padding={3} radius={2} border overflow="auto">
               <table style={{width: '100%', borderCollapse: 'collapse', fontSize: 13}}>

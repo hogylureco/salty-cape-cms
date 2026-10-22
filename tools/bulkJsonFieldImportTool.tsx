@@ -929,8 +929,8 @@ export function BulkJsonFieldImport() {
 
   return (
     <Box padding={4}>
-      <Stack space={4} style={{maxWidth: 920, margin: '0 auto'}}>
-        <Stack space={2}>
+      <Stack gap={4} style={{maxWidth: 920, margin: '0 auto'}}>
+        <Stack gap={2}>
           <Heading size={3}>Bulk JSON Field Import</Heading>
           <Text size={1} muted>
             Create new documents, or update existing ones, from a JSON array. A record whose match
@@ -943,7 +943,7 @@ export function BulkJsonFieldImport() {
         {/* leftovers from the earlier draft-prefix bug */}
         {leftovers.length > 0 && (
           <Card padding={3} radius={2} tone="caution">
-            <Stack space={3}>
+            <Stack gap={3}>
               <Text size={1} weight="semibold">
                 {leftovers.length} leftover document{leftovers.length === 1 ? '' : 's'} from an earlier version of this
                 tool
@@ -952,7 +952,7 @@ export function BulkJsonFieldImport() {
                 Their _id starts with “drafts.drafts.”, so Studio lists them as blank duplicates and cannot open or
                 delete them. They are ignored by this import. Deleting them does not touch the real documents.
               </Text>
-              <Stack space={2}>
+              <Stack gap={2}>
                 {leftovers.slice(0, 20).map((d) => (
                   <Code key={d._id} size={1}>
                     {`${d._id}  (${d._type ?? 'unknown type'}${d.label ? ` · ${d.label}` : ''})`}
@@ -979,9 +979,9 @@ export function BulkJsonFieldImport() {
 
         {/* options */}
         <Card padding={3} radius={2} shadow={1}>
-          <Stack space={3}>
+          <Stack gap={3}>
             <Flex gap={4} wrap="wrap">
-              <Stack space={2}>
+              <Stack gap={2}>
                 <Label size={1}>Document type</Label>
                 {docTypes.length > 0 ? (
                   <Select value={typeName} onChange={(e) => setTypeName(e.currentTarget.value)}>
@@ -1001,14 +1001,14 @@ export function BulkJsonFieldImport() {
                   />
                 )}
               </Stack>
-              <Stack space={2}>
+              <Stack gap={2}>
                 <Label size={1}>Match on</Label>
                 <Select value={matchField} onChange={(e) => setMatchField(e.currentTarget.value as any)}>
                   <option value="id">custom `id` field</option>
                   <option value="_id">`_id`</option>
                 </Select>
               </Stack>
-              <Stack space={2}>
+              <Stack gap={2}>
                 <Label size={1}>If no document matches</Label>
                 <Select
                   value={createMissing ? 'create' : 'skip'}
@@ -1018,7 +1018,7 @@ export function BulkJsonFieldImport() {
                   <option value="skip">Skip the record</option>
                 </Select>
               </Stack>
-              <Stack space={2}>
+              <Stack gap={2}>
                 <Label size={1}>Write to</Label>
                 <Select value={target} onChange={(e) => setTarget(e.currentTarget.value as any)}>
                   <option value="draft">Drafts</option>
@@ -1034,7 +1034,7 @@ export function BulkJsonFieldImport() {
         </Card>
 
         {/* input */}
-        <Stack space={3}>
+        <Stack gap={3}>
           <Flex gap={2} align="center">
             <Button
               as="label"
@@ -1071,7 +1071,7 @@ export function BulkJsonFieldImport() {
         {/* errors / warnings */}
         {issues.length > 0 && (
           <Card padding={3} radius={2} tone="critical">
-            <Stack space={2}>
+            <Stack gap={2}>
               <Flex align="center" gap={2}>
                 <WarningOutlineIcon />
                 <Text weight="semibold">{issues.length} error(s)</Text>
@@ -1086,7 +1086,7 @@ export function BulkJsonFieldImport() {
         )}
         {warnings.length > 0 && (
           <Card padding={3} radius={2} tone="caution">
-            <Stack space={2}>
+            <Stack gap={2}>
               {warnings.slice(0, 20).map((m, i) => (
                 <Text key={i} size={1}>
                   {m}
@@ -1099,7 +1099,7 @@ export function BulkJsonFieldImport() {
         {/* plan / dry-run */}
         {plan && (
           <Card padding={3} radius={2} shadow={1}>
-            <Stack space={3}>
+            <Stack gap={3}>
               <Flex gap={2} align="center" wrap="wrap">
                 <Badge tone="positive">{newCount} new</Badge>
                 <Badge tone="primary">{updateCount} to update</Badge>
@@ -1117,7 +1117,7 @@ export function BulkJsonFieldImport() {
 
               {unresolved.length > 0 && (
                 <Card padding={2} radius={2} tone="critical">
-                  <Stack space={2}>
+                  <Stack gap={2}>
                     <Text size={1} weight="semibold">
                       {unresolved.length} reference(s) with no match
                     </Text>
@@ -1132,7 +1132,7 @@ export function BulkJsonFieldImport() {
 
               {relabelled.length > 0 && (
                 <Card padding={2} radius={2} tone="caution">
-                  <Stack space={2}>
+                  <Stack gap={2}>
                     <Text size={1} weight="semibold">
                       {relabelled.length} reference(s) matched by code; the stored label differs
                     </Text>
@@ -1145,13 +1145,13 @@ export function BulkJsonFieldImport() {
                 </Card>
               )}
 
-              <Stack space={2}>
+              <Stack gap={2}>
                 {plan.slice(0, 50).map((item, i) => {
                   const d = decisions[i]
                   const ok = d.action !== 'hold'
                   return (
                     <Card key={i} padding={2} radius={2} tone={ok ? 'default' : 'transparent'}>
-                      <Stack space={2}>
+                      <Stack gap={2}>
                         <Flex align="center" gap={2} wrap="wrap">
                           {ok ? (
                             <CheckmarkIcon style={{color: 'green'}} />

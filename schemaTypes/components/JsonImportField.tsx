@@ -443,9 +443,9 @@ function DocumentImporter(props: ObjectInputProps) {
     : null
 
   return (
-    <Stack space={4}>
+    <Stack gap={4}>
       <Card padding={3} radius={2} tone="primary" border>
-        <Stack space={3}>
+        <Stack gap={3}>
           <Text size={1} weight="semibold">
             Import from JSON
           </Text>
@@ -474,7 +474,7 @@ function DocumentImporter(props: ObjectInputProps) {
 
       {report && counts && (
         <Card padding={3} radius={2} tone="transparent" border>
-          <Stack space={4}>
+          <Stack gap={4}>
             <Flex align="center" justify="space-between" gap={2}>
               <Text size={1} weight="semibold">
                 Review import
@@ -520,12 +520,12 @@ function DocumentImporter(props: ObjectInputProps) {
               <Button mode="ghost" fontSize={1} text="Select none" onClick={() => setAll(false)} />
             </Flex>
 
-            <Stack space={2}>
+            <Stack gap={2}>
               {report.map((r) => {
                 const isOpen = !!expanded[r.key]
                 return (
                   <Card key={r.key} padding={3} radius={2} border tone="default">
-                    <Stack space={3}>
+                    <Stack gap={3}>
                       <Flex align="center" gap={3}>
                         <Checkbox
                           checked={!!selected[r.key]}
@@ -580,7 +580,7 @@ function DocumentImporter(props: ObjectInputProps) {
                       {isOpen && (
                         <Flex gap={3} wrap="wrap" align="stretch">
                           <Box flex={1} style={{minWidth: 240}}>
-                            <Stack space={2}>
+                            <Stack gap={2}>
                               <Text size={0} weight="semibold" muted>
                                 EXISTING
                               </Text>
@@ -590,7 +590,7 @@ function DocumentImporter(props: ObjectInputProps) {
                             </Stack>
                           </Box>
                           <Box flex={1} style={{minWidth: 240}}>
-                            <Stack space={2}>
+                            <Stack gap={2}>
                               <Text size={0} weight="semibold" muted>
                                 INCOMING
                               </Text>
