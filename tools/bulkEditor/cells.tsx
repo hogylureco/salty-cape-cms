@@ -16,6 +16,7 @@ import {
   RefChip,
   RefEditor,
   refLabel,
+  StatusBadge,
   TagsEditor,
 } from './editors'
 import type {ColumnDef} from './schemaColumns'
@@ -344,6 +345,33 @@ function SummaryCell({row, col}: CellProps) {
   )
 }
 
+const formatTimestamp = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})
+
+function MetaCell({row, col}: CellProps) {
+  const v = row[col.key]
+  if (col.key === '_status') {
+    return (
+      <Flex align="center" paddingX={2} style={{height: '100%'}}>
+        <StatusBadge label={row._status} />
+      </Flex>
+    )
+  }
+  return (
+    <Flex align="center" paddingX={2} style={{height: '100%', minWidth: 0}}>
+      {typeof v === 'string' ? (
+        <Text size={1} muted textOverflow="ellipsis" title={v}>
+          {formatTimestamp(v)}
+        </Text>
+      ) : (
+        <Text size={1} muted>
+          —
+        </Text>
+      )}
+    </Flex>
+  )
+}
+
 /** Keeps one cell with unexpected data from taking down the whole Studio. */
 class CellErrorBoundary extends Component<{children: ReactNode; label: string}, {error: Error | null}> {
   state = {error: null as Error | null}
@@ -371,6 +399,7 @@ export function Cell(props: CellProps) {
 }
 
 function CellBody(props: CellProps) {
+  if (props.col.meta) return <MetaCell {...props} />
   switch (props.col.kind) {
     case 'select':
       return <SelectCell {...props} />

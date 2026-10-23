@@ -18,7 +18,13 @@ export interface RefValue {
 export interface DocStatus {
   draft: boolean
   published: boolean
+  /** Earliest `_createdAt` across the draft and published document. */
+  createdAt?: string
+  /** Latest `_updatedAt` across the draft and published document. */
+  updatedAt?: string
 }
+
+export type StatusLabel = 'published' | 'draft' | 'changed'
 
 export type PatchOperations = {set?: Record<string, unknown>; unset?: string[]}
 
@@ -32,18 +38,54 @@ export function randomKey(len = 12): string {
   return out
 }
 
-/** Draft/published presence per published id, from the raw-perspective list of `_id`s. */
-export function statusFromIds(ids: string[]): Map<string, DocStatus> {
+export interface DocStamp {
+  _id: string
+  _createdAt?: string
+  _updatedAt?: string
+}
+
+/**
+ * Draft/published presence and timestamps per published id, from the raw-perspective list of
+ * documents. Release versions (`versions.*`) are ignored.
+ */
+export function statusFromDocs(docs: DocStamp[]): Map<string, DocStatus> {
   const map = new Map<string, DocStatus>()
-  for (const id of ids) {
+  for (const doc of docs) {
+    const id = doc._id
     if (id.startsWith('versions.')) continue
     const base = publishedIdOf(id)
     const s = map.get(base) ?? {draft: false, published: false}
     if (id.startsWith('drafts.')) s.draft = true
     else s.published = true
+    // ISO timestamps compare correctly as strings.
+    if (doc._createdAt && (!s.createdAt || doc._createdAt < s.createdAt)) s.createdAt = doc._createdAt
+    if (doc._updatedAt && (!s.updatedAt || doc._updatedAt > s.updatedAt)) s.updatedAt = doc._updatedAt
     map.set(base, s)
   }
   return map
+}
+
+/** "changed" is a published document with an unpublished draft. */
+export function statusLabel(s: DocStatus | undefined): StatusLabel | undefined {
+  if (!s || (!s.draft && !s.published)) return undefined
+  if (s.draft && s.published) return 'changed'
+  return s.draft ? 'draft' : 'published'
+}
+
+/**
+ * A drafts-perspective row or document with `_status`, `_createdAt` and `_updatedAt` taken from
+ * both the draft and the published document: a draft's own `_createdAt` is when the draft was
+ * made, not when the document was.
+ */
+export function withMeta<T extends {_id: string}>(doc: T, status: Map<string, DocStatus>): T {
+  const s = status.get(doc._id)
+  if (!s) return doc
+  return {
+    ...doc,
+    _status: statusLabel(s),
+    ...(s.createdAt ? {_createdAt: s.createdAt} : {}),
+    ...(s.updatedAt ? {_updatedAt: s.updatedAt} : {}),
+  }
 }
 
 export function isRef(item: unknown): item is RefValue {

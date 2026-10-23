@@ -7,7 +7,7 @@
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {useClient, useSchema} from 'sanity'
-import {buildEdit, editAction, statusFromIds, type DocStatus} from './actions'
+import {buildEdit, editAction, statusFromDocs, withMeta, type DocStamp, type DocStatus} from './actions'
 import {buildRefIndexQuery, buildRowsQuery, STATUS_QUERY, type GridFilters} from './groq'
 import {previewTitleField, type ColumnDef} from './schemaColumns'
 
@@ -24,7 +24,11 @@ export function useBulkClient() {
 export interface Row {
   _id: string
   _type: string
+  /** Earliest of the draft's and published document's, see `withMeta`. */
+  _createdAt?: string
+  /** Latest of the draft's and published document's. */
   _updatedAt: string
+  _status?: 'published' | 'draft' | 'changed'
   _rev: string
   id?: string | null
   [key: string]: unknown
@@ -101,12 +105,20 @@ export function useGridData(typeName: string, visible: ColumnDef[], all: ColumnD
     const request = ++requestRef.current
     setState((s) => ({...s, loading: true}))
     try {
-      const [result, ids] = await Promise.all([
+      const [result, docs] = await Promise.all([
         client.fetch<{rows: Row[]; total: number}>(query, params, {perspective: 'drafts', tag: 'bulk-editor.rows'}),
-        client.fetch<string[]>(STATUS_QUERY, {type: typeName}, {perspective: 'raw', tag: 'bulk-editor.status'}),
+        client.fetch<DocStamp[]>(STATUS_QUERY, {type: typeName}, {perspective: 'raw', tag: 'bulk-editor.status'}),
       ])
       if (request !== requestRef.current) return
-      setState({rows: result.rows, total: result.total, status: statusFromIds(ids), loading: false, loaded: true, error: null})
+      const status = statusFromDocs(docs)
+      setState({
+        rows: result.rows.map((r) => withMeta(r, status)),
+        total: result.total,
+        status,
+        loading: false,
+        loaded: true,
+        error: null,
+      })
       setOverlay((prev) => {
         if (!prev.size) return prev
         const revs = new Map(result.rows.map((r) => [r._id, r._rev]))
@@ -234,23 +246,26 @@ export function useRefIndex(types: string[]): RefIndex {
 }
 
 const VISIBLE_KEY = (typeName: string) => `bulkEditor.columns.${typeName}`
-const DEFAULT_VISIBLE = 12
 
+/** Shown when a type is first opened; status and created are in the column picker. */
+const HIDDEN_BY_DEFAULT = ['_status', '_createdAt']
+
+// Stored as {v: 3, keys}. A bare array is from before the status and timestamp columns existed,
+// so Last modified is switched on for it once.
 function readStoredColumns(typeName: string): string[] | null {
   try {
     const raw = window.localStorage.getItem(VISIBLE_KEY(typeName))
     const parsed = raw ? JSON.parse(raw) : null
-    return Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string') : null
+    const keys = Array.isArray(parsed) ? ['_updatedAt', ...parsed] : parsed?.v === 3 ? parsed.keys : null
+    return Array.isArray(keys) ? keys.filter((k) => typeof k === 'string') : null
   } catch {
     return null
   }
 }
 
+/** Every column except status and created. */
 export function defaultVisibleColumns(columns: ColumnDef[]): string[] {
-  return columns
-    .filter((c) => c.kind !== 'summary')
-    .slice(0, DEFAULT_VISIBLE)
-    .map((c) => c.key)
+  return columns.filter((c) => !HIDDEN_BY_DEFAULT.includes(c.key)).map((c) => c.key)
 }
 
 /** Which columns show, per document type, remembered in this browser. */
@@ -262,7 +277,7 @@ export function useColumnVisibility(typeName: string, columns: ColumnDef[]) {
     (keys: string[]) => {
       setVisibleKeys(keys)
       try {
-        window.localStorage.setItem(VISIBLE_KEY(typeName), JSON.stringify(keys))
+        window.localStorage.setItem(VISIBLE_KEY(typeName), JSON.stringify({v: 3, keys}))
       } catch {
         // Storage can be unavailable (private window); the choice just won't persist.
       }

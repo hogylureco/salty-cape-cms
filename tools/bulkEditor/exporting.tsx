@@ -1,12 +1,14 @@
 /**
  * CSV and JSON export, shared by the toolbar (the whole current view) and the selection bar.
- * CSV has the visible columns; JSON has every field of each document as stored.
+ * CSV has `_id`, status, created, last modified and the visible columns; JSON has every field of each document as
+ * stored, plus `_status`. In both, `_createdAt`/`_updatedAt` span the draft and published document.
  */
 import {useState} from 'react'
 import {Button, Spinner} from '@sanity/ui'
 import {Menu, MenuButton, MenuItem} from '@sanity/ui/menu'
 import {useToast} from '@sanity/ui/toast'
 import {DownloadIcon} from '@sanity/icons/Download'
+import {withMeta, type DocStatus} from './actions'
 import {orderByIds, toCsv, toJson} from './csv'
 import {buildExportQuery, FULL_EXPORT_QUERY} from './groq'
 import type {ColumnDef} from './schemaColumns'
@@ -30,6 +32,7 @@ export function ExportMenu({
   ids,
   columns,
   refs,
+  status,
   /** Goes into the filename and the toast, e.g. "view" or "selected". */
   scope,
   mode = 'ghost',
@@ -39,6 +42,7 @@ export function ExportMenu({
   ids: string[]
   columns: ColumnDef[]
   refs: RefIndex
+  status: Map<string, DocStatus>
   scope: string
   mode?: 'ghost' | 'bleed'
 }) {
@@ -46,6 +50,7 @@ export function ExportMenu({
   const toast = useToast()
   const [busy, setBusy] = useState<ExportFormat | null>(null)
 
+  const fieldCount = columns.filter((c) => !c.meta).length
   const run = async (format: ExportFormat) => {
     setBusy(format)
     try {
@@ -54,7 +59,7 @@ export function ExportMenu({
         format === 'csv'
           ? await client.fetch<Row[]>(buildExportQuery(columns), {ids}, options)
           : await client.fetch<Row[]>(FULL_EXPORT_QUERY, {ids}, options)
-      const ordered = orderByIds(docs, ids)
+      const ordered = orderByIds(docs, ids).map((doc) => withMeta(doc, status))
       const filename = `${typeName}-${scope}-${new Date().toISOString().slice(0, 10)}.${format}`
       if (format === 'csv') download(toCsv(columns, ordered, (ref) => refs.byId.get(ref)), filename, 'text/csv;charset=utf-8')
       else download(toJson(ordered), filename, 'application/json;charset=utf-8')
@@ -85,11 +90,11 @@ export function ExportMenu({
       menu={
         <Menu>
           <MenuItem
-            text={`CSV — ${columns.length} visible column${columns.length === 1 ? '' : 's'}`}
+            text={`CSV — status, dates and ${fieldCount} visible column${fieldCount === 1 ? '' : 's'}`}
             fontSize={1}
             onClick={() => run('csv')}
           />
-          <MenuItem text="JSON — full documents, all fields" fontSize={1} onClick={() => run('json')} />
+          <MenuItem text="JSON — full documents, all fields and status" fontSize={1} onClick={() => run('json')} />
         </Menu>
       }
       popover={{portal: true, placement: 'bottom-end'}}

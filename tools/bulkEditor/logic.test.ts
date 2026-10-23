@@ -2,10 +2,10 @@
 import assert from 'node:assert/strict'
 import {test} from 'node:test'
 import {evaluate, parse} from 'groq-js'
-import {buildEdit, chunk, deleteAction, editAction, planBulk, splitRefArray, statusFromIds} from './actions.ts'
+import {buildEdit, chunk, deleteAction, editAction, planBulk, splitRefArray, statusFromDocs, statusLabel, withMeta} from './actions.ts'
 import {orderByIds, toCsv, toJson} from './csv.ts'
-import {buildExportQuery, buildRefIndexQuery, buildRowsQuery, FULL_EXPORT_QUERY, type GridFilters} from './groq.ts'
-import type {ColumnDef} from './schemaColumns.ts'
+import {buildExportQuery, buildRefIndexQuery, buildRowsQuery, FULL_EXPORT_QUERY, STATUS_QUERY, type GridFilters} from './groq.ts'
+import {META_COLUMNS, type ColumnDef} from './schemaColumns.ts'
 
 const col = (key: string, kind: ColumnDef['kind'], extra: Partial<ColumnDef> = {}): ColumnDef => ({
   key,
@@ -117,10 +117,11 @@ test('weak reference arrays write _weak and keep existing keys', () => {
 })
 
 test('status and bulk plans skip documents an action does not apply to', () => {
-  const status = statusFromIds(['drafts.a', 'a', 'drafts.b', 'c', 'versions.r1.a'])
+  const status = statusFromDocs(['drafts.a', 'a', 'drafts.b', 'c', 'versions.r1.a'].map((_id) => ({_id})))
   assert.deepEqual(status.get('a'), {draft: true, published: true})
   assert.deepEqual(status.get('b'), {draft: true, published: false})
   assert.deepEqual(status.get('c'), {draft: false, published: true})
+  assert.deepEqual(['a', 'b', 'c', 'x'].map((id) => statusLabel(status.get(id))), ['changed', 'draft', 'published', undefined])
   assert.deepEqual(planBulk('publish', ['a', 'b', 'c'], status).targets, ['a', 'b'])
   assert.deepEqual(planBulk('unpublish', ['a', 'b', 'c'], status).targets, ['a', 'c'])
   assert.equal(planBulk('delete', ['a', 'b', 'c'], status).skipped, 0)
@@ -138,7 +139,7 @@ test('csv uses field-name headers, ref titles and escapes', () => {
     [{_id: 'a', name: 'West, End', zone: [{_ref: 'z1'}, {_ref: 'gone'}], notes: 'Line "one"'}],
     (ref) => (ref === 'z1' ? {title: 'Inshore'} : undefined),
   )
-  assert.equal(csv, '﻿_id,name,zone,notes\r\na,"West, End",Inshore; gone (missing),"Line ""one"""\r\n')
+  assert.equal(csv, '﻿_id,_status,_createdAt,_updatedAt,name,zone,notes\r\na,,,,"West, End",Inshore; gone (missing),"Line ""one"""\r\n')
 })
 
 // Imported data can hold nulls or plain strings where references or strings belong.
@@ -172,7 +173,7 @@ test('a string list stored as a single string becomes a proper list on edit', ()
 
 test('csv marks invalid list items instead of failing', () => {
   const csv = toCsv([columns[4], columns[5]], [{_id: 'm', zone: [null, 'Fall', {_ref: 'z1'}], platform: 'boat'}], () => ({title: 'Inshore'}))
-  assert.equal(csv.split('\r\n')[1], 'm,null (invalid); Fall (invalid); Inshore,boat')
+  assert.equal(csv.split('\r\n')[1], 'm,,,,null (invalid); Fall (invalid); Inshore,boat')
 })
 
 test('json export returns whole documents in view order', async () => {
@@ -182,4 +183,30 @@ test('json export returns whole documents in view order', async () => {
   assert.deepEqual(ordered.map((d: any) => d._id), ['b', 'a'])
   assert.deepEqual(ordered[1].notes, dataset[1].notes) // every field, not just visible columns
   assert.deepEqual(JSON.parse(toJson(ordered)), ordered)
+})
+
+test('created is the earliest and modified the latest across draft and published', async () => {
+  const raw = [
+    {_id: 'p', _type: 'spot', _createdAt: '2026-01-01T00:00:00Z', _updatedAt: '2026-03-01T00:00:00Z'},
+    {_id: 'drafts.p', _type: 'spot', _createdAt: '2026-04-01T00:00:00Z', _updatedAt: '2026-04-02T00:00:00Z'},
+    {_id: 'versions.r1.p', _type: 'spot', _createdAt: '2025-01-01T00:00:00Z', _updatedAt: '2027-01-01T00:00:00Z'},
+  ]
+  const params = {type: 'spot'}
+  const docs = await (await evaluate(parse(STATUS_QUERY, {params}), {dataset: raw, params})).get()
+  const status = statusFromDocs(docs)
+  const row = withMeta({_id: 'p', _createdAt: '2026-04-01T00:00:00Z', name: 'Point'}, status)
+  assert.deepEqual(row, {
+    _id: 'p',
+    _createdAt: '2026-01-01T00:00:00Z',
+    name: 'Point',
+    _status: 'changed',
+    _updatedAt: '2026-04-02T00:00:00Z',
+  })
+  const csv = toCsv(META_COLUMNS, [row], () => undefined)
+  assert.equal(csv.split('\r\n')[1], 'p,changed,2026-01-01T00:00:00Z,2026-04-02T00:00:00Z')
+})
+
+test('timestamp columns are not projected from the drafts perspective', () => {
+  const {query} = buildRowsQuery('spot', META_COLUMNS, META_COLUMNS, {search: '', columns: {}})
+  assert.ok(!query.includes('_createdAt'))
 })

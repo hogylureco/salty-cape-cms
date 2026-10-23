@@ -1,10 +1,11 @@
 /**
  * CSV export for the Bulk Editor. Headers are field names (so the file maps straight back onto
  * the schema in the Bulk Import tool), references are written as their target's title, and
- * Portable Text as plain text.
+ * Portable Text as plain text. `_status` (published, draft or changed), `_createdAt` and
+ * `_updatedAt` always follow `_id`, whether or not their columns are showing.
  */
 import {isRef, type RefValue} from './actions.ts'
-import type {ColumnDef} from './schemaColumns.ts'
+import {META_COLUMNS, type ColumnDef} from './schemaColumns.ts'
 
 export interface RefLabel {
   title?: string | null
@@ -51,10 +52,11 @@ export function toCsv(
   rows: Record<string, unknown>[],
   labelOf: (ref: string) => RefLabel | undefined,
 ): string {
-  const header = ['_id', ...columns.map((c) => c.key)]
+  const all = [...META_COLUMNS, ...columns.filter((c) => !c.meta)]
+  const header = ['_id', ...all.map((c) => c.key)]
   const lines = [header.map(cell).join(',')]
   for (const row of rows) {
-    lines.push([row._id, ...columns.map((c) => exportValue(c, row[c.key], labelOf))].map(cell).join(','))
+    lines.push([row._id, ...all.map((c) => exportValue(c, row[c.key], labelOf))].map(cell).join(','))
   }
   // BOM so Excel opens UTF-8 (accents, en dashes in ids) correctly.
   return `﻿${lines.join('\r\n')}\r\n`

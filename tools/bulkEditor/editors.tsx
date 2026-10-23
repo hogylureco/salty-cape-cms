@@ -6,7 +6,7 @@
 import {useMemo, useState, type KeyboardEvent} from 'react'
 import {Badge, Box, Button, Card, Checkbox, Flex, Select, Stack, Text, TextArea, TextInput} from '@sanity/ui'
 import {CloseIcon} from '@sanity/icons/Close'
-import {isRef, splitRefArray, splitStringArray} from './actions'
+import {isRef, splitRefArray, splitStringArray, type StatusLabel} from './actions'
 import type {ColumnDef} from './schemaColumns'
 import type {RefIndex, RefTarget} from './useBulkData'
 
@@ -382,9 +382,9 @@ export function editorValueOf(col: ColumnDef, rowValue: unknown): unknown {
   return rowValue ?? null
 }
 
-export function StatusBadge({status}: {status?: {draft: boolean; published: boolean}}) {
-  if (!status) return null
-  if (status.draft && status.published) return <Badge tone="caution">Changed</Badge>
-  if (status.draft) return <Badge tone="default">Draft</Badge>
-  return <Badge tone="positive">Published</Badge>
+export function StatusBadge({label}: {label?: StatusLabel}) {
+  if (label === 'changed') return <Badge tone="caution">Changed</Badge>
+  if (label === 'draft') return <Badge tone="default">Draft</Badge>
+  if (label === 'published') return <Badge tone="positive">Published</Badge>
+  return null
 }

@@ -49,7 +49,8 @@ export function columnProjection(col: ColumnDef, opts: {export?: boolean} = {}):
 
 export function rowProjection(columns: ColumnDef[], opts: {export?: boolean} = {}): string {
   const fields = ['_id', '_type', '_updatedAt', '_rev', 'id']
-  for (const col of columns) if (col.key !== 'id') fields.push(columnProjection(col, opts))
+  // Timestamp columns come from `withMeta`, across the draft and published document.
+  for (const col of columns) if (col.key !== 'id' && !col.meta) fields.push(columnProjection(col, opts))
   return `{${fields.join(', ')}}`
 }
 
@@ -115,8 +116,8 @@ export function buildRowsQuery(
   }
 }
 
-/** Every document id of the type, raw perspective: drafts.<id>, <id> and versions.*. */
-export const STATUS_QUERY = `*[_type == $type]._id`
+/** Every document of the type, raw perspective: drafts.<id>, <id> and versions.*, with timestamps. */
+export const STATUS_QUERY = `*[_type == $type]{_id, _createdAt, _updatedAt}`
 
 /** Whole documents for JSON export, drafts perspective: the draft where one exists. */
 export const FULL_EXPORT_QUERY = `*[_id in $ids]`

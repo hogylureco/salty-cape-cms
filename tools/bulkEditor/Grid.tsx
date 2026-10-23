@@ -11,15 +11,12 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import {useVirtualizer} from '@tanstack/react-virtual'
-import type {DocStatus} from './actions'
 import {Cell, CellContext, type CellContextValue} from './cells'
-import {StatusBadge} from './editors'
 import type {ColumnDef, ColumnKind} from './schemaColumns'
 import type {Row} from './useBulkData'
 
 const ROW_HEIGHT = 37
 const SELECT_WIDTH = 44
-const STATUS_WIDTH = 100
 
 const WIDTHS: Record<ColumnKind, number> = {
   string: 200,
@@ -38,6 +35,11 @@ const WIDTHS: Record<ColumnKind, number> = {
   summary: 240,
 }
 
+const STATUS_WIDTH = 100
+const TIMESTAMP_WIDTH = 180
+const widthOf = (col: ColumnDef) =>
+  col.key === '_status' ? STATUS_WIDTH : col.meta ? TIMESTAMP_WIDTH : WIDTHS[col.kind]
+
 const cellBorder = {borderRight: '1px solid var(--card-border-color)'}
 const stickyLeft = (left: number) => ({position: 'sticky' as const, left, zIndex: 1})
 
@@ -54,7 +56,6 @@ export function compareValues(a: unknown, b: unknown): number {
 export interface GridProps {
   rows: Row[]
   columns: ColumnDef[]
-  status: Map<string, DocStatus>
   selected: Set<string>
   onToggleRow: (id: string) => void
   onToggleAll: () => void
@@ -63,7 +64,7 @@ export interface GridProps {
   cell: Omit<CellContextValue, 'move'>
 }
 
-export function Grid({rows, columns, status, selected, onToggleRow, onToggleAll, sorting, onSortingChange, cell}: GridProps) {
+export function Grid({rows, columns, selected, onToggleRow, onToggleAll, sorting, onSortingChange, cell}: GridProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const tableColumns = useMemo<TableColumn<Row>[]>(
@@ -112,7 +113,7 @@ export function Grid({rows, columns, status, selected, onToggleRow, onToggleAll,
   )
   const cellContext = useMemo(() => ({...cell, move}), [cell, move])
 
-  const totalWidth = SELECT_WIDTH + STATUS_WIDTH + columns.reduce((sum, c) => sum + WIDTHS[c.kind], 0)
+  const totalWidth = SELECT_WIDTH + columns.reduce((sum, c) => sum + widthOf(c), 0)
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r._id))
   const someSelected = !allSelected && rows.some((r) => selected.has(r._id))
   const headers = table.getHeaderGroups()[0]?.headers ?? []
@@ -134,13 +135,6 @@ export function Grid({rows, columns, status, selected, onToggleRow, onToggleAll,
                 />
               </Flex>
             </Card>
-            <Card style={{...stickyLeft(SELECT_WIDTH), ...cellBorder, width: STATUS_WIDTH, flexShrink: 0}}>
-              <Flex align="center" paddingX={2} style={{height: '100%'}}>
-                <Text size={1} weight="medium">
-                  Status
-                </Text>
-              </Flex>
-            </Card>
             {headers.map((header, i) => {
               const col = columns[i]
               const sorted = header.column.getIsSorted()
@@ -149,9 +143,9 @@ export function Grid({rows, columns, status, selected, onToggleRow, onToggleAll,
                   key={header.id}
                   role="columnheader"
                   aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined}
-                  title={`${col.key} · ${col.schemaType}${col.readOnly ? ' · read-only' : ''}`}
+                  title={col.meta ? `${col.key} · ${col.key === '_status' ? 'published, draft or changed' : 'across draft and published'}` : `${col.key} · ${col.schemaType}${col.readOnly ? ' · read-only' : ''}`}
                   onClick={col.sortable ? header.column.getToggleSortingHandler() : undefined}
-                  style={{...cellBorder, width: WIDTHS[col.kind], flexShrink: 0, cursor: col.sortable ? 'pointer' : 'default'}}
+                  style={{...cellBorder, width: widthOf(col), flexShrink: 0, cursor: col.sortable ? 'pointer' : 'default'}}
                 >
                   <Flex align="center" gap={1} paddingX={2} style={{height: '100%'}}>
                     <Box flex={1} style={{minWidth: 0}}>
@@ -199,16 +193,8 @@ export function Grid({rows, columns, status, selected, onToggleRow, onToggleAll,
                       />
                     </Flex>
                   </Card>
-                  <Card
-                    tone={isSelected ? 'primary' : 'default'}
-                    style={{...stickyLeft(SELECT_WIDTH), ...cellBorder, width: STATUS_WIDTH, flexShrink: 0}}
-                  >
-                    <Flex align="center" paddingX={2} style={{height: '100%'}}>
-                      <StatusBadge status={status.get(row._id)} />
-                    </Flex>
-                  </Card>
                   {columns.map((col, c) => (
-                    <Box key={col.key} role="gridcell" style={{...cellBorder, width: WIDTHS[col.kind], flexShrink: 0, overflow: 'hidden'}}>
+                    <Box key={col.key} role="gridcell" style={{...cellBorder, width: widthOf(col), flexShrink: 0, overflow: 'hidden'}}>
                       <Cell row={row} col={col} cellId={`${item.index}:${c}`} />
                     </Box>
                   ))}

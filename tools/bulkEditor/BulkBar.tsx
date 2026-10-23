@@ -85,6 +85,7 @@ export function BulkBar({
           ids={selectedIds}
           columns={exportColumns}
           refs={refs}
+          status={status}
           scope="selected"
         />
         <Button text="Delete…" icon={TrashIcon} mode="ghost" tone="critical" fontSize={1} padding={2} onClick={() => setDialog('delete')} />

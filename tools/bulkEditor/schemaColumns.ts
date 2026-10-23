@@ -50,6 +50,8 @@ export interface ColumnDef {
   /** Array members disagree on `weak`; the column writes strong refs. */
   mixedWeak?: boolean
   summary?: SummaryKind
+  /** Document status or timestamp (`_status`, `_createdAt`, `_updatedAt`), not a schema field. Never editable. */
+  meta?: boolean
   sortable: boolean
   filterable: boolean
   searchable: boolean
@@ -217,6 +219,26 @@ export function deriveColumns(schema: Schema, typeName: string): ColumnDef[] {
       }
     })
 }
+
+const metaColumn = (key: string, title: string, kind: ColumnKind, schemaType: string): ColumnDef => ({
+  key,
+  title,
+  kind,
+  schemaType,
+  readOnly: true,
+  editable: false,
+  meta: true,
+  sortable: true,
+  filterable: false,
+  searchable: false,
+})
+
+/** Status and timestamps, shown like columns and always exported. Values come from `withMeta`. */
+export const META_COLUMNS: ColumnDef[] = [
+  metaColumn('_status', 'Status', 'string', 'published | draft | changed'),
+  metaColumn('_createdAt', 'Created', 'datetime', 'datetime'),
+  metaColumn('_updatedAt', 'Last modified', 'datetime', 'datetime'),
+]
 
 /** Document types to offer in the picker: schema documents, minus Sanity/plugin system types. */
 export function listDocumentTypes(schema: Schema): {name: string; title: string}[] {

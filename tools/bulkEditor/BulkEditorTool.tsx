@@ -16,7 +16,7 @@ import {BulkBar} from './BulkBar'
 import {ExportMenu} from './exporting'
 import {compareValues, Grid} from './Grid'
 import {ROW_LIMIT, type ColumnFilter, type GridFilters} from './groq'
-import {deriveColumns, listDocumentTypes, unhandledColumns, type ColumnDef} from './schemaColumns'
+import {deriveColumns, listDocumentTypes, META_COLUMNS, unhandledColumns, type ColumnDef} from './schemaColumns'
 import {ColumnPicker, FilterControls, RowCount, SearchBox, StatusToggle, type StatusFilter} from './Toolbar'
 import {defaultVisibleColumns, useColumnVisibility, useGridData, useRefIndex, type Row} from './useBulkData'
 
@@ -30,7 +30,7 @@ function refTypesOf(columns: ColumnDef[]): string[] {
 function TypeView({typeName, typeTitle}: {typeName: string; typeTitle: string}) {
   const schema = useSchema()
   const toast = useToast()
-  const columns = useMemo(() => deriveColumns(schema, typeName), [schema, typeName])
+  const columns = useMemo(() => [...META_COLUMNS, ...deriveColumns(schema, typeName)], [schema, typeName])
   const defaultKeys = useMemo(() => defaultVisibleColumns(columns), [columns])
   const {visible, visibleKeys, setVisibleKeys} = useColumnVisibility(typeName, columns)
 
@@ -169,7 +169,6 @@ function TypeView({typeName, typeTitle}: {typeName: string; typeTitle: string}) 
       <Grid
         rows={shownRows}
         columns={visible}
-        status={data.status}
         selected={selected}
         onToggleRow={toggleRow}
         onToggleAll={toggleAll}
@@ -201,7 +200,7 @@ function TypeView({typeName, typeTitle}: {typeName: string; typeTitle: string}) 
             }}
           />
           <ColumnPicker columns={columns} visibleKeys={visibleKeys} defaultKeys={defaultKeys} onChange={setVisibleKeys} />
-          <ExportMenu id="bulk-editor-export-view" typeName={typeName} ids={viewIds} columns={visible} refs={refs} scope="view" />
+          <ExportMenu id="bulk-editor-export-view" typeName={typeName} ids={viewIds} columns={visible} refs={refs} status={data.status} scope="view" />
           <Box flex={1} />
           <RowCount
             shown={shownRows.length}
