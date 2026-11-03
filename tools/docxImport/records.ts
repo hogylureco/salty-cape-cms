@@ -6,7 +6,7 @@ import {PENDING_UPLOAD} from './htmlToPortableText.ts'
 export const DEFAULT_VERSION = 'v3.1'
 
 // The third segment of the code is the spot type: "BB.WE.fs" -> fs.
-const SPOT_TYPES: Record<string, string> = {
+export const SPOT_TYPES: Record<string, string> = {
   fs: 'fs-featured-spot',
   fx: 'fx-spot-playbook-approach',
   br: 'br-boat-ramp',
@@ -36,32 +36,15 @@ export function defaultSlug(id: string, name: string, regionSlugs: Map<string, s
   return slugify(region ? `${region} ${name}` : name)
 }
 
-export interface SpotMeta {
-  name: string
-  slug: string
-  spotType: string
-  version: string
-}
-
-export const META_FIELDS = ['name', 'slug', 'spotType', 'version'] as const
-
 export interface SpotRecord {
   _type: 'spot'
   match: string
   fields: Record<string, any>
 }
 
-/** `withMeta: false` for spots that already exist: only the narrative fields are patched. */
-export function toRecord(id: string, meta: SpotMeta, narratives: Record<string, any[]>, withMeta: boolean): SpotRecord {
-  const fields: Record<string, any> = {}
-  if (withMeta) {
-    fields.name = meta.name
-    fields.slug = {_type: 'slug', current: meta.slug}
-    fields.spotType = meta.spotType
-    fields.version = meta.version
-  }
-  Object.assign(fields, narratives)
-  return {_type: 'spot', match: id, fields}
+/** `fields`: what the review screen says to write — the chosen field-table values, then the narratives. */
+export function toRecord(id: string, fields: Record<string, any>, narratives: Record<string, any[]>): SpotRecord {
+  return {_type: 'spot', match: id, fields: {...fields, ...narratives}}
 }
 
 /** Remove blocks still waiting for an upload (for the downloadable JSON, which cannot carry them). */

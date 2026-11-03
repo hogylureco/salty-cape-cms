@@ -332,7 +332,7 @@ export interface RawRefDoc {
   title?: string
 }
 
-interface RefTarget {
+export interface RefTarget {
   baseId: string
   type: string
   hasPublished: boolean
@@ -392,7 +392,7 @@ export function matchToken(token: string, to: string[], index: RefIndex): TokenM
   return {problem: `no ${to.join('/')} document has this ${REF_MATCH_FIELD}`}
 }
 
-function refObject(target: RefTarget, weak: boolean, withKey: boolean): Record<string, any> {
+export function refObject(target: RefTarget, weak: boolean, withKey: boolean): Record<string, any> {
   const ref: Record<string, any> = {_type: 'reference', _ref: target.baseId}
   if (withKey) ref._key = randKey()
   if (weak) ref._weak = true

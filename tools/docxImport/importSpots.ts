@@ -13,7 +13,7 @@ import {
   type WriteDecision,
 } from '../shared/importDocuments.ts'
 import {PENDING_UPLOAD} from './htmlToPortableText.ts'
-import {META_FIELDS, type SpotRecord} from './records.ts'
+import type {SpotRecord} from './records.ts'
 
 function dataUriToBlob(uri: string): Blob {
   const [head, data] = uri.split(',', 2)
@@ -78,8 +78,6 @@ export async function importSpots(
   onStatus?.('Checking for existing spots…')
   const plan = await resolveImport(client, {records, specs, type, matchField: 'id'})
   const decisions = plan.map((item) => decideWrite(item, {target: 'draft', createMissing: true, skipUnresolved: false}))
-  // An existing spot keeps its name, slug, type and version; only the narrative fields are replaced.
-  for (const item of plan) if (item.baseId) for (const f of META_FIELDS) delete item.fields[f]
   const work = plan.map((item, i) => ({item, d: decisions[i]})).filter((w) => w.d.action !== 'hold' && w.d.writeId)
 
   if (work.some((w) => hasPending(w.item))) {
