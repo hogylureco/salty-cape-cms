@@ -10,16 +10,20 @@
     "deploy-graphql": "sanity graphql deploy",
     "dev": "sanity dev",
     "start": "sanity start",
-    "test:bulk-editor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/bulkEditor/*.test.ts"
+    "test:bulk-editor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/bulkEditor/*.test.ts",
+    "test:docx-import": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/docxImport/*.test.ts"
   },
   "keywords": [
     "sanity"
   ],
   "dependencies": {
+    "@portabletext/block-tools": "^6.0.5",
     "@portabletext/editor": "8.2.3",
+    "@portabletext/react": "^8.0.1",
     "@sanity/vision": "^6.18.0",
     "@tanstack/react-table": "8.21.3",
     "@tanstack/react-virtual": "3.14.13",
+    "mammoth": "^1.13.0",
     "papaparse": "^5.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -32,6 +36,7 @@
     "@sanity/eslint-config-studio": "^6.0.0",
     "@types/react": "^19.2.14",
     "eslint": "^9.28",
+    "jsdom": "^29.1.1",
     "prettier": "^3.5",
     "typescript": "^5.8"
   },

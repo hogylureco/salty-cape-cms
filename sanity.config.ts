@@ -7,6 +7,7 @@ import {richTablePlugin} from 'sanity-plugin-rich-table'
 import {media} from 'sanity-plugin-media'
 import {bulkJsonFieldImportTool} from './tools/bulkJsonFieldImportTool'
 import {bulkEditorTool} from './tools/bulkEditor'
+import {docxImportTool} from './tools/docxImport'
 
 export default defineConfig({
   name: 'default',
@@ -29,6 +30,7 @@ export default defineConfig({
     },
     bulkJsonFieldImportTool,
     bulkEditorTool,
+    docxImportTool,
   ],
   
 })
