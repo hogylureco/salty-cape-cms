@@ -8,6 +8,7 @@ import {media} from 'sanity-plugin-media'
 import {bulkJsonFieldImportTool} from './tools/bulkJsonFieldImportTool'
 import {bulkEditorTool} from './tools/bulkEditor'
 import {docxImportTool} from './tools/docxImport'
+import {htmlImportTool} from './tools/htmlImport'
 
 export default defineConfig({
   name: 'default',
@@ -31,6 +32,7 @@ export default defineConfig({
     bulkJsonFieldImportTool,
     bulkEditorTool,
     docxImportTool,
+    htmlImportTool,
   ],
   
 })

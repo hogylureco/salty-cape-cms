@@ -14,7 +14,7 @@
  * "Download JSON" gives the exact array that tool accepts.
  */
 
-import {useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent} from 'react'
+import {useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type ReactNode} from 'react'
 import {useClient, useSchema} from 'sanity'
 import {IntentLink} from 'sanity/router'
 import {PortableText, type PortableTextComponents} from '@portabletext/react'
@@ -308,7 +308,44 @@ function RefChips({
   )
 }
 
+/** Where the spots come from: a Word file (this tool) or an HTML file (htmlImport). */
+export interface ImportSource {
+  title: string // the tool heading
+  intro: ReactNode
+  fileNoun: string // "Word document", in "Drop a Word document here"
+  fileRe: RegExp // file names the tool accepts
+  accept: string // the file input's accept attribute
+  chooseText: string // "Choose .docx file"
+  /** The file -> spots. `json`, when given, is the intermediate parse offered as "Download parsed JSON". */
+  parse: (file: File, fieldMap: Map<string, string>) => Promise<{docs: SplitDoc[]; messages: DocxMessage[]; json?: unknown}>
+}
+
+export const DOCX_SOURCE: ImportSource = {
+  title: 'Import Word Doc',
+  intro: (
+    <>
+      Spots only. A spot starts at its “Field | Value” table (★ 1. ID, 2. Version, 3. Name …) or at a Heading 1
+      written as its ID (“BB.WE.fs - West End of the Canal”). Each table row is matched to a spot field — check the
+      matches and untick anything you don’t want written. Each Heading 2 starts a section: Capt Mike’s Notes,
+      Historical Analysis … Q&amp;A with Capt Mike. A spot that already exists has only the ticked fields and the
+      sections in the document replaced in its draft; a new spot is created as a draft. Nothing is published.
+    </>
+  ),
+  fileNoun: 'Word document',
+  fileRe: /\.docx$/i,
+  accept: '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  chooseText: 'Choose .docx file',
+  parse: async (file, fieldMap) => {
+    const {html, messages} = await parseDocx(file)
+    return {docs: splitSections(html, fieldMap), messages}
+  },
+}
+
 export function DocxImport() {
+  return <SpotDocImport source={DOCX_SOURCE} />
+}
+
+export function SpotDocImport({source}: {source: ImportSource}) {
   const client = useClient(CLIENT_OPTIONS)
   const schema = useSchema()
   const toast = useToast()
@@ -369,6 +406,7 @@ export function DocxImport() {
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
   const [messages, setMessages] = useState<DocxMessage[]>([])
+  const [parsedJson, setParsedJson] = useState<unknown>(null)
   const [spots, setSpots] = useState<SpotState[]>([])
   const [dragging, setDragging] = useState(false)
   const [importing, setImporting] = useState<string | null>(null)
@@ -376,28 +414,29 @@ export function DocxImport() {
 
   const loadFile = useCallback(
     async (file: File) => {
-      if (!/\.docx$/i.test(file.name)) {
-        toast.push({status: 'error', title: 'Choose a Word .docx file', description: file.name})
+      if (!source.fileRe.test(file.name)) {
+        toast.push({status: 'error', title: source.chooseText, description: file.name})
         return
       }
       setParsing(true)
       setResults(null)
       setSpots([])
       setMessages([])
+      setParsedJson(null)
       setFileName(file.name)
       try {
-        const {html, messages: msgs} = await parseDocx(file)
+        const {docs: split, messages: msgs, json} = await source.parse(file, fieldMap)
         setMessages(msgs)
-        const split = splitSections(html, fieldMap)
+        setParsedJson(json ?? null)
         setSpots(split.map((s) => newSpot(s, {labelMap, infos, regionSlugs, schema})))
         if (!split.length) toast.push({status: 'warning', title: 'The document is empty.'})
       } catch (e: any) {
-        toast.push({status: 'error', title: 'Could not read the Word file', description: e.message})
+        toast.push({status: 'error', title: `Could not read the ${source.fileNoun}`, description: e.message})
       } finally {
         setParsing(false)
       }
     },
-    [fieldMap, labelMap, infos, regionSlugs, schema, toast],
+    [source, fieldMap, labelMap, infos, regionSlugs, schema, toast],
   )
 
   const onPick = useCallback(
@@ -582,14 +621,10 @@ export function DocxImport() {
     [spots, views, rowFields],
   )
 
+  const baseName = fileName.replace(/\.[^.]+$/, '') || 'spots'
   const download = useCallback(() => {
     const {records, dropped} = recordsFor(true)
-    const blob = new Blob([JSON.stringify(records, null, 2)], {type: 'application/json'})
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `${fileName.replace(/\.docx$/i, '') || 'spots'}.json`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    saveJson(records, `${baseName}.json`)
     if (dropped) {
       toast.push({
         status: 'warning',
@@ -597,7 +632,7 @@ export function DocxImport() {
         description: 'Pictures are only uploaded by the Import button.',
       })
     }
-  }, [recordsFor, fileName, toast])
+  }, [recordsFor, baseName, toast])
 
   const runImport = useCallback(async () => {
     setImporting('Starting…')
@@ -634,13 +669,9 @@ export function DocxImport() {
     <Box padding={4}>
       <Stack gap={4} style={{maxWidth: 1100, margin: '0 auto'}}>
         <Stack gap={2}>
-          <Heading size={3}>Import Word Doc</Heading>
+          <Heading size={3}>{source.title}</Heading>
           <Text size={1} muted>
-            Spots only. A spot starts at its “Field | Value” table (★ 1. ID, 2. Version, 3. Name …) or at a Heading 1
-            written as its ID (“BB.WE.fs - West End of the Canal”). Each table row is matched to a spot field — check
-            the matches and untick anything you don’t want written. Each Heading 2 starts a section: Capt Mike’s Notes,
-            Historical Analysis … Q&amp;A with Capt Mike. A spot that already exists has only the ticked fields and the
-            sections in the document replaced in its draft; a new spot is created as a draft. Nothing is published.
+            {source.intro}
           </Text>
         </Stack>
 
@@ -666,26 +697,30 @@ export function DocxImport() {
         >
           <Flex direction="column" align="center" gap={3}>
             {parsing ? <Spinner /> : <UploadIcon style={{fontSize: 32}} />}
-            <Text size={2}>{parsing ? `Reading ${fileName}…` : 'Drop a Word document here'}</Text>
-            <Button as="label" text="Choose .docx file" mode="ghost" tone="primary" style={{cursor: 'pointer'}}>
-              <input
-                type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                hidden
-                onChange={onPick}
-              />
+            <Text size={2}>{parsing ? `Reading ${fileName}…` : `Drop a ${source.fileNoun} here`}</Text>
+            <Button as="label" text={source.chooseText} mode="ghost" tone="primary" style={{cursor: 'pointer'}}>
+              <input type="file" accept={source.accept} hidden onChange={onPick} />
             </Button>
             {fileName && !parsing && (
               <Text size={1} muted>
                 {fileName}: {spots.length} spot{spots.length === 1 ? '' : 's'}
               </Text>
             )}
+            {parsedJson !== null && !parsing && (
+              <Button
+                icon={DownloadIcon}
+                text="Download parsed JSON"
+                mode="bleed"
+                fontSize={1}
+                onClick={() => saveJson(parsedJson, `${baseName}.parsed.json`)}
+              />
+            )}
           </Flex>
         </Card>
 
         <Messages
           tone="caution"
-          title="Messages from reading the Word file"
+          title={`Messages from reading the ${source.fileNoun}`}
           items={messages.map((m) => `${m.type === 'error' ? 'Error' : 'Note'}: ${m.message}`)}
         />
 
@@ -889,6 +924,15 @@ export function DocxImport() {
 }
 
 /** The suggested slug follows the name and ID while the slug row is the tool's own and untouched. */
+function saveJson(data: unknown, name: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'})
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
 function followSlug(rows: FieldRow[], id: string, regionSlugs: Map<string, string>): FieldRow[] {
   const name = rows.find((r) => r.field === 'name')?.text ?? ''
   return rows.map((r) =>

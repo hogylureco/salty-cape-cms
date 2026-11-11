@@ -31,7 +31,7 @@ export function imageRule(warn: (message: string) => void): DeserializerRule {
       if ((el as Element).tagName !== 'IMG') return undefined
       const src = (el as Element).getAttribute('src') ?? ''
       if (!src.startsWith('data:image/')) {
-        warn(`An image that is linked rather than embedded in the Word file was left out (${src.slice(0, 60) || 'no source'}).`)
+        warn(`An image that is linked rather than embedded in the file was left out (${src.slice(0, 60) || 'no source'}).`)
         return []
       }
       return {_type: 'image', _key: randKey(), [PENDING_UPLOAD]: src}
