@@ -638,7 +638,7 @@ export function SpotDocImport({source}: {source: ImportSource}) {
     setImporting('Starting…')
     try {
       const {records} = recordsFor(false)
-      const {plan, decisions, done, made} = await importSpots(client, {docType, type: DOC_TYPE, records, onStatus: setImporting})
+      const {plan, decisions, done, made, imageProblems} = await importSpots(client, {docType, type: DOC_TYPE, records, onStatus: setImporting})
       setResults(
         plan.map((item, i) => ({
           match: item.match,
@@ -653,6 +653,14 @@ export function SpotDocImport({source}: {source: ImportSource}) {
         status: held ? 'warning' : 'success',
         title: `Imported ${done} spot${done === 1 ? '' : 's'}: ${made} new, ${done - made} updated${held ? `, ${held} held back` : ''}.`,
       })
+      if (imageProblems.length) {
+        toast.push({
+          status: 'warning',
+          duration: 15000,
+          title: `${imageProblems.length} picture${imageProblems.length === 1 ? '' : 's'} could not be imported`,
+          description: imageProblems.slice(0, 3).join('\n'),
+        })
+      }
     } catch (e: any) {
       toast.push({status: 'error', title: 'Import failed', description: e.message})
     } finally {

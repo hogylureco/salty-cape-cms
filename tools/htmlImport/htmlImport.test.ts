@@ -112,3 +112,39 @@ test('lat/long rows split; unknown sections are kept as unmatched', () => {
   assert.equal(doc.sections.gearTechnique, '<p>g</p>')
   assert.deepEqual(doc.meta, [])
 })
+
+test('linked images become pending uploads, are downloaded and uploaded once each', async () => {
+  const {PENDING_UPLOAD} = await import('../docxImport/htmlToPortableText.ts')
+  const {uploadPendingImages} = await import('../docxImport/importSpots.ts')
+  const url = 'https://ik.imagekit.io/hogylures/NOAA-Charts/BB.WE.5.NOAA.Chart.png'
+  const html = `<p>Chart:</p><p><img src="${url}" alt="chart"></p><p><img src="${url}"></p><p><img src="/relative.png"></p><p><img src="https://x.test/missing.png"></p>`
+  const warnings: string[] = []
+  const blocks = convertField(html, convertTypesFor(schema, 'spot', 'captMikeNotes')!, (m) => warnings.push(m), parse)
+  const pending = blocks.filter((b) => b[PENDING_UPLOAD])
+  assert.deepEqual(pending.map((b) => b[PENDING_UPLOAD]), [url, url, 'https://x.test/missing.png'])
+  assert.equal(warnings.length, 1) // only the relative one
+  assert.match(warnings[0], /relative\.png/)
+
+  const realFetch = globalThis.fetch
+  const fetched: string[] = []
+  globalThis.fetch = (async (u: string) => {
+    fetched.push(u)
+    if (u.includes('missing')) return new Response('nope', {status: 404})
+    return new Response(new Blob([new Uint8Array([137, 80, 78, 71])], {type: 'image/png'}))
+  }) as any
+  const uploads: string[] = []
+  const client = {assets: {upload: async (_t: string, _b: Blob, o: any) => (uploads.push(o.filename), {_id: `image-${uploads.length}`})}}
+  const item: any = {match: 'BB.WE.fs - West End of the Canal', fields: {captMikeNotes: blocks}}
+  try {
+    const problems = await uploadPendingImages(client as any, [item])
+    assert.deepEqual(fetched, [url, 'https://x.test/missing.png'])
+    assert.deepEqual(uploads, ['BB.WE.5.NOAA.Chart.png'])
+    assert.equal(problems.length, 1)
+    assert.match(problems[0], /missing\.png.*HTTP 404/)
+    const images = item.fields.captMikeNotes.filter((b: any) => b._type === 'image')
+    assert.equal(images.length, 2)
+    assert.ok(images.every((b: any) => b.asset._ref === 'image-1' && !b[PENDING_UPLOAD]))
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})

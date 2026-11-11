@@ -10,8 +10,8 @@ export type ParseHtml = (html: string) => Document
 export const browserParseHtml: ParseHtml = (h) => new DOMParser().parseFromString(h, 'text/html')
 
 /**
- * An embedded image waits for upload under this key; the import replaces the whole block with
- * a real image block ({asset: {_ref}}) before writing.
+ * An image waits for upload under this key — its data: URI (embedded) or http(s) URL (linked);
+ * the import replaces the whole block with a real image block ({asset: {_ref}}) before writing.
  */
 export const PENDING_UPLOAD = '_pendingUpload'
 
@@ -29,9 +29,9 @@ export function imageRule(warn: (message: string) => void): DeserializerRule {
   return {
     deserialize(el) {
       if ((el as Element).tagName !== 'IMG') return undefined
-      const src = (el as Element).getAttribute('src') ?? ''
-      if (!src.startsWith('data:image/')) {
-        warn(`An image that is linked rather than embedded in the file was left out (${src.slice(0, 60) || 'no source'}).`)
+      const src = ((el as Element).getAttribute('src') ?? '').trim()
+      if (!src.startsWith('data:image/') && !/^https?:\/\//i.test(src)) {
+        warn(`An image with no usable address was left out (${src.slice(0, 60) || 'no source'}): only embedded images and full http(s) links can be imported.`)
         return []
       }
       return {_type: 'image', _key: randKey(), [PENDING_UPLOAD]: src}
